@@ -50,7 +50,7 @@ if not sys.path.__contains__("/usr/lib/freecad/lib"):
  
 import WFGui_2015 as WFGui
 global myRelease
-myRelease = "2105_02_17"
+myRelease = "2105_02_19"
 
 import os.path
 import math
@@ -3882,7 +3882,9 @@ def plot_cutObject():
             printError_msg(error_msg)
             return
         m_Plane = SubObject
-        
+        Ref_Plane = m_Plane
+        Plane_Point = Ref_Plane.CenterOfMass
+        Plane_Normal = Ref_Plane.normalAt(0,0)
         m_Obj = m_cut_obj[1][0]
         try:                
             m_Obj.Shape 
@@ -3914,7 +3916,7 @@ def plot_cutObject():
             print_point(Point_B, msg=str(Point_B_User_Name) + ", (internal Point_B) : ")
             Point_C_User_Name = plot_point(Point_C, part, "Point_C", grp=str(m_dir))
             print_point(Point_C, msg=str(Point_C_User_Name) + ", (internal Point_C) : ")
-            print_msg( "Distance : " + str(m_Edge.Length))
+            print_msg( "Length : " + str(m_Edge.Length))
             
 
         # Get object's limits
@@ -3935,7 +3937,8 @@ def plot_cutObject():
         
 #==============================================================================                    
         # Looking for the min distance between center of line and center 
-        # of faces of the bounding box. An selection of this Plane
+        # of faces of the bounding box. And selection of this Plane if quite
+        # Parallel to Ref. Plane
         min_val, max_val = init_min_max()
         m_min_distance = max_val
         Plane_Point1 = None
@@ -3943,18 +3946,32 @@ def plot_cutObject():
         Selected_Plane1 = Faces[0][5]
         for m_i in range(len(Faces)):               
             #( 3,  0,  1, 2, (BB_Edges[3][3],BB_Edges[0][3],BB_Edges[1][3],BB_Edges[2][3]), face, mid_point, length )                
-            m_distance = distanceBetween(Point_C, Faces[m_i][6])                 
-            if m_distance < m_min_distance:
+            m_distance = distanceBetween(Point_C, Faces[m_i][6])            
+            m_angle = Faces[m_i][5].normalAt(0,0).getAngle(Plane_Normal)
+            if msg == 1:
+                print_msg( "Distance between Point_C and face of bounding box : " + str(m_distance) )                 
+                print_msg( "Angle between Ref Plane and selected bounding box Plane : " + str(math.fmod(math.degrees(m_angle), 180.)) )            
+            if m_distance < m_min_distance and math.fmod(math.degrees(m_angle), 180.) <= 45. :
                 m_min_distance = m_distance
                 Selected_Plane1 = Faces[m_i][5]
                 Plane_Point1 = Faces[m_i][6]
                 Plane_Normal1 = Selected_Plane1.normalAt(0,0)
+                if msg == 1:
+                    print_msg( "Distance selected : " + str(m_distance) )                 
+                    print_msg( "Angle selected : " + str(math.fmod(math.degrees(m_angle), 180.)) )            
+          
         if Plane_Point1 == None:
             printError_msg("Plane_Point1 is Null!")
             return
         if Plane_Normal1 == None:
             printError_msg("Plane_Normal1 is Null!")
             return
+        if msg == 1:
+            print_msg( "\nGet Bounding Planes info")
+            print_msg( "MIN Distance : " + str(m_min_distance) )
+            Point_Face01_User_Name = plot_point(Plane_Point1, part, "Point_Face01", grp=str(m_dir))
+            print_point(Plane_Point1, msg=str(Point_Face01_User_Name) + ", (internal Point_Face01) : ")
+
 #==============================================================================
                 
 #==============================================================================        
@@ -3963,14 +3980,16 @@ def plot_cutObject():
         Plane_Normal2 = None
         Selected_Plane2 = Faces[0][5]
         for m_i in range(len(Faces)):
-            Plane_Normal = Faces[m_i][5].normalAt(0,0)
-            if Plane_Normal != Plane_Normal1:
-                cross_product = Plane_Normal.cross(Plane_Normal1)
-                if abs(cross_product.x) <= 1e-12 and abs(cross_product.y) <= 1e-12 and abs(cross_product.z) <= 1e-12:
-                    Selected_Plane2 = Faces[m_i][5]
-                    Plane_Point2 = Faces[m_i][6]
-                    Plane_Normal2 = Selected_Plane2.normalAt(0,0)
-                    break
+            m_angle = Faces[m_i][5].normalAt(0,0).getAngle(Plane_Normal1)
+            if msg == 1:
+                print_msg( "Angle First Plane and selected bounding box Plane : " + str(math.fmod(math.degrees(m_angle), 180.)) )            
+            if Faces[m_i][5] != Selected_Plane1 and math.fmod(math.degrees(m_angle), 180.) <= .5 :
+#                cross_product = Plane_Normal_new .cross(Plane_Normal1)
+#                if abs(cross_product.x) <= 1e-12 and abs(cross_product.y) <= 1e-12 and abs(cross_product.z) <= 1e-12:
+                Selected_Plane2 = Faces[m_i][5]
+                Plane_Point2 = Faces[m_i][6]
+                Plane_Normal2 = Selected_Plane2.normalAt(0,0)
+                break
         if Plane_Point2 == None:
             printError_msg("Plane_Point2 is Null!")
             return
@@ -3978,10 +3997,6 @@ def plot_cutObject():
             printError_msg("Plane_Normal2 is Null!")
             return        
         if msg == 1:
-            print_msg( "\nGet Bounding Planes info")
-            print_msg( "MIN Distance : " + str(m_min_distance) )
-            Point_Face01_User_Name = plot_point(Plane_Point1, part, "Point_Face01", grp=str(m_dir))
-            print_point(Plane_Point1, msg=str(Point_Face01_User_Name) + ", (internal Point_Face01) : ")
             Point_Face02_User_Name = plot_point(Plane_Point2, part, "Point_Face02", grp=str(m_dir))
             print_point(Plane_Point2, msg=str(Point_Face02_User_Name) + ", (internal Point_Face02) : ")
 
@@ -3989,9 +4004,7 @@ def plot_cutObject():
             
 #==============================================================================
         # Build The Plane Crossing the Line and making an angle with the Ref. Plane
-        Ref_Plane = m_Plane
-        Plane_Point = Ref_Plane.CenterOfMass
-        Plane_Normal = Ref_Plane.normalAt(0,0)
+
         # Projection of A and B onto the Ref Plane A0 and B0
         Vector_A = Point_A + Plane_Normal
         Vector_B = Point_B + Plane_Normal
