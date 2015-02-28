@@ -51,7 +51,7 @@ if not sys.path.__contains__("/usr/lib/freecad/lib"):
  
 import WFGui_2015 as WFGui
 global myRelease
-myRelease = "2105_02_26"
+myRelease = "2105_02_28"
 
 import os.path
 import math
@@ -450,7 +450,8 @@ def meanObjects(objs,info=0):
     mean = App.Vector(0.0,0.0,0.0)
     
     return mean
-    
+ 
+   
 def minMaxObjectsLimits(objs,info=0):
     """ Return the min and max limits along the 3 Axis for all selected objects.
     """
@@ -620,15 +621,20 @@ def centerObjectsPoint(objs,info=0):
     if info != 0:
         print_point(center,"Center of all objects selected is : ")
     return center
+
     
 def centerLinePoints(edge, index, number,info=0):
     """ Return the point at index/number of the Line.
     """
-    Vector_A = None
-    distance = edge.Length / 2
+    Vector_A = edge.Vertexes[0].Point
+    Vector_B = edge.Vertexes[-1].Point
+    distance = Vector_B.sub(Vector_A).Length / 2
+    
+    #distance = edge.Length / 2
     if number != 0:
         distance = index * (edge.Length / number)
-    Vector_A = edge.valueAt( distance )   
+    #Vector_A = edge.valueAt( distance ) 
+    Vector_A = Vector_A.add(Vector_B.sub(Vector_A).normalize().multiply( distance ))    
     if info != 0:
         print_point(Vector_A,"Point of line selected is : ") 
     return Vector_A
@@ -638,8 +644,14 @@ def centerLinePoint(edge,info=0):
     """ Return the center point of the Line.
     """
     center = None
-    Vector_A=edge.valueAt( 0.0 )
-    Vector_B=edge.valueAt( edge.Length )
+    #VVector_A=edge.valueAt( 0.0 )
+    Vector_A = edge.Vertexes[0].Point
+    if info != 0:
+        print_point(Vector_A,"Origin of line selected is : ") 
+    #Vector_B=edge.valueAt( edge.Length )
+    Vector_B = edge.Vertexes[-1].Point
+    if info != 0:
+        print_point(Vector_B,"End of line selected is : ") 
     Vector_MidPoint = Vector_B + Vector_A
     center = Vector_MidPoint.multiply(0.5)
     if info != 0:
@@ -1699,8 +1711,8 @@ def plot_extremaLinePoint():
                 if msg != 0:
                     print_msg(str(Edge_List[i]))
                 edge = Edge_List[i]
-                Vector_A = edge.valueAt( 0.0 )
-                Vector_B = edge.valueAt( edge.Length )
+                Vector_A = edge.Vertexes[0].Point
+                Vector_B = edge.Vertexes[-1].Point
                 if msg != 0:
                     print_point(Vector_A, msg="First Point : ")
                     print_point(Vector_B, msg="Last Point : ")
@@ -1767,7 +1779,7 @@ def plot_centerLinePoint():
                 if m_numberLinePart == 2:
                     if msg != 0:
                         print_msg(str(Edge_List[i]))
-                    Vector_Line_Center = centerLinePoint(Edge_List[i],info=1)
+                    Vector_Line_Center = centerLinePoint(Edge_List[i],info=msg)
                     if msg != 0:
                         print_point(Vector_Line_Center, msg="MidPoint : ")
                     
@@ -1775,7 +1787,7 @@ def plot_centerLinePoint():
                     print_point(Vector_Line_Center,str(Center_User_Name) + result_msg + " at :")
                 else:
                     for j in range( 1, m_numberLinePart ):
-                        Vector_Line_Center = centerLinePoints(Edge_List[i], j , m_numberLinePart, info=1)
+                        Vector_Line_Center = centerLinePoints(Edge_List[i], j , m_numberLinePart, info=msg)
                         Center_User_Name = plot_point(Vector_Line_Center, part, name)
                         print_point(Vector_Line_Center,str(Center_User_Name) + result_msg + " at :")
         else:
@@ -2675,14 +2687,19 @@ def extensionLinePointAxis(value):
         print_msg("New extension is :" + str(m_extensionLinePointAxis))
     except ValueError:
         printError_msg("Extension must be valid number !")
+
         
 
 def plot_linePointAxis():
-    """ Plot an Axis perpendicular to an other axis and passing trougth a Point.
+    """ 
+    Plot  an Axis Perpendicular to an Axis and crossing a Point
+    -Select one Axis and one Point NOT on the previous Axis.
     """ 
     msg=0   
     createFolders('WorkAxis')
-    error_msg = "Unable to create Perpendicular Axis : \nSelect one Point and one Line only !"
+    error_msg = "Unable to create Perpendicular Axis : \n " + \
+                "Select one Point and one Line only !\n" + \
+                "The Point is NOT on the Line!"
     result_msg = " : Perpendicular Axis created !"
     name = "Perpendicular Line"
     part = "Part::Feature"
@@ -2729,12 +2746,14 @@ def plot_linePointAxis():
     
     
 def plot_pointLineAxis():
-    """ Plot an Axis paralell to an other axis and passing trougth a Point.
+    """ 
+    Plot an Axis Parallel to an Axis and crossing a Point.
+    -Select one Axis and one Point NOT on the previous Axis.
     """
     msg=0
     createFolders('WorkAxis')
     error_msg = "Unable to create Parallel Axis : \nSelect one Point and one Line only !"
-    result_msg = " : Paralell Axis created !"
+    result_msg = " : Parallel Axis created !"
     name = "Parallel Line"
     part = "Part::Feature"
     global m_attach_point
@@ -4926,15 +4945,15 @@ def object_parallel():
     # Javier Martinez Garcia 2015
     SelObj = Gui.Selection.getSelectionEx()
     try:
-      NormalA = SelObj[0].SubObjects[0].normalAt(0,0)
-      NormalB = SelObj[1].SubObjects[0].normalAt(0,0)
-      if NormalA.cross(NormalB).Length == 0.0:
-        print_gui_msg("\nFaces are parallel\n")
-      else:
-        print_gui_msg("\nNon parallel faces\n")
+        NormalA = SelObj[0].SubObjects[0].normalAt(0,0)
+        NormalB = SelObj[1].SubObjects[0].normalAt(0,0)
+        if NormalA.cross(NormalB).Length == 0.0:
+            print_gui_msg("\nFaces are parallel\n")
+        else:
+            print_gui_msg("\nNon parallel faces\n")
 
     except:
-      printError_msg("\nWrong selection!\n") 
+        printError_msg("\nWrong selection!\n") 
 
 
 def object_perpendicular():
@@ -4943,15 +4962,15 @@ def object_perpendicular():
     # Javier Martinez Garcia 2015
     SelObj = Gui.Selection.getSelectionEx()
     try:
-      NormalA = SelObj[0].SubObjects[0].normalAt(0,0)
-      NormalB = SelObj[1].SubObjects[0].normalAt(0,0)
-      if NormalA.dot(NormalB) == 0.0:
-        print_gui_msg("\nFaces are perpendicular\n")
-      else:
-        print_gui_msg("\nNon perpendicular faces\n")
+        NormalA = SelObj[0].SubObjects[0].normalAt(0,0)
+        NormalB = SelObj[1].SubObjects[0].normalAt(0,0)
+        if NormalA.dot(NormalB) == 0.0:
+            print_gui_msg("\nFaces are perpendicular\n")
+        else:
+            print_gui_msg("\nNon perpendicular faces\n")
 
     except:
-      printError_msg("\nWrong selection!\n")
+        printError_msg("\nWrong selection!\n")
  
      
 def object_coplanar():
@@ -5085,6 +5104,7 @@ class WorkFeatureTab():
                              "button_isCoplanar"           : "object_coplanar",
                                                           
                             } 
+                            
         self.connections_for_text_changed = { 
                              "distance_point_on_line"    : "distanceLinePoint",
                              
