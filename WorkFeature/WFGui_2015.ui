@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>386</width>
-    <height>767</height>
+    <width>387</width>
+    <height>838</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -59,8 +59,8 @@
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>350</width>
-        <height>765</height>
+        <width>351</width>
+        <height>813</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_4">
@@ -76,14 +76,14 @@
           <attribute name="title">
            <string>W. F.</string>
           </attribute>
-          <layout class="QGridLayout" name="gridLayout_22">
-           <item row="0" column="1">
+          <layout class="QGridLayout" name="gridLayout_30">
+           <item row="0" column="0">
             <widget class="QTabWidget" name="tabWidget">
              <property name="tabPosition">
               <enum>QTabWidget::West</enum>
              </property>
              <property name="currentIndex">
-              <number>8</number>
+              <number>1</number>
              </property>
              <widget class="QWidget" name="Origin_Tab">
               <attribute name="icon">
@@ -139,6 +139,30 @@
                        </property>
                       </widget>
                      </item>
+                     <item row="1" column="0">
+                      <layout class="QHBoxLayout" name="horizontalLayout_25">
+                       <item>
+                        <widget class="QLabel" name="label_5">
+                         <property name="text">
+                          <string>Tolerance</string>
+                         </property>
+                        </widget>
+                       </item>
+                       <item>
+                        <widget class="QLineEdit" name="tolerance_edit">
+                         <property name="maximumSize">
+                          <size>
+                           <width>60</width>
+                           <height>16777215</height>
+                          </size>
+                         </property>
+                         <property name="text">
+                          <string>1e-10</string>
+                         </property>
+                        </widget>
+                       </item>
+                      </layout>
+                     </item>
                     </layout>
                    </widget>
                   </item>
@@ -153,7 +177,7 @@
                  <property name="sizeHint" stdset="0">
                   <size>
                    <width>20</width>
-                   <height>539</height>
+                   <height>40</height>
                   </size>
                  </property>
                 </spacer>
@@ -574,7 +598,7 @@ Then click on this button.</string>
               <attribute name="title">
                <string>Axis</string>
               </attribute>
-              <layout class="QGridLayout" name="gridLayout_30">
+              <layout class="QGridLayout" name="gridLayout_22">
                <item row="0" column="0">
                 <widget class="QPushButton" name="button_object_axis">
                  <property name="toolTip">
@@ -780,7 +804,8 @@ then click on a location on the selected object.</string>
                  <item>
                   <widget class="QPushButton" name="button_point_line_axis">
                    <property name="toolTip">
-                    <string>Create an Axis parallel to an Axis and crossing a Point.</string>
+                    <string>Create an Axis Parallel to an Axis and crossing a Point.
+-Select one Axis and one Point NOT on the previous Axis.</string>
                    </property>
                    <property name="text">
                     <string>Axis=(Point,Axis)</string>
@@ -844,7 +869,8 @@ End of the line.</string>
                     </sizepolicy>
                    </property>
                    <property name="toolTip">
-                    <string>Create an Axis perpendicular to an Axis and crossing a Point.</string>
+                    <string>Create an Axis Perpendicular to an Axis and crossing a Point
+-Select one Axis and one Point NOT on the previous Axis.</string>
                    </property>
                    <property name="text">
                     <string>Axis=(Axis,Point)</string>
@@ -882,7 +908,8 @@ End of the line.</string>
                <item row="5" column="0">
                 <widget class="QPushButton" name="button_twolines_axis">
                  <property name="toolTip">
-                  <string>Create an Axis between 2 Axes.</string>
+                  <string>Create an Axis between two Axes.
+-Select two Axes.</string>
                  </property>
                  <property name="text">
                   <string>Axis=(Line,Line)</string>
@@ -900,6 +927,27 @@ End of the line.</string>
                 </widget>
                </item>
                <item row="6" column="0">
+                <widget class="QPushButton" name="button_plane_point_line_axis">
+                 <property name="toolTip">
+                  <string>Create an Axis Perpendicular to an Axis, crossing a Point and Parallel to a Plane.
+-Select one Plane, one Axis and one Point ON the previous Axis.</string>
+                 </property>
+                 <property name="text">
+                  <string>Axis=(Plane,Point,Axis)</string>
+                 </property>
+                 <property name="icon">
+                  <iconset>
+                   <normaloff>../Icons/WF_planeLinePointAxis.svg</normaloff>../Icons/WF_planeLinePointAxis.svg</iconset>
+                 </property>
+                 <property name="iconSize">
+                  <size>
+                   <width>32</width>
+                   <height>32</height>
+                  </size>
+                 </property>
+                </widget>
+               </item>
+               <item row="7" column="0">
                 <layout class="QHBoxLayout" name="horizontalLayout_21">
                  <item>
                   <widget class="QPushButton" name="button_cut_axis">
@@ -953,7 +1001,7 @@ The number indicates in how many parts to cut.</string>
                  </item>
                 </layout>
                </item>
-               <item row="7" column="0">
+               <item row="8" column="0">
                 <widget class="QPushButton" name="button_line_plane_axis">
                  <property name="toolTip">
                   <string>Create an Axis on a Plane by projection from anoher Axis.</string>
@@ -973,7 +1021,7 @@ The number indicates in how many parts to cut.</string>
                  </property>
                 </widget>
                </item>
-               <item row="8" column="0">
+               <item row="9" column="0">
                 <widget class="QPushButton" name="button_twoplanes_axis">
                  <property name="toolTip">
                   <string>Create an Axis by intersect of 2 Planes.</string>
@@ -993,7 +1041,7 @@ The number indicates in how many parts to cut.</string>
                  </property>
                 </widget>
                </item>
-               <item row="9" column="0">
+               <item row="10" column="0">
                 <widget class="QRadioButton" name="button_click_for_axis">
                  <property name="toolTip">
                   <string>Create a set of Lines on a Plane perpendicular to the view at location of 2 mouse clicks.
@@ -1015,7 +1063,7 @@ The number indicates in how many parts to cut.</string>
                  </property>
                 </widget>
                </item>
-               <item row="10" column="0">
+               <item row="11" column="0">
                 <widget class="QPushButton" name="button_object_base_axes">
                  <property name="toolTip">
                   <string>Create 3 Axes at Base location of all selected Object(s).</string>
@@ -1035,7 +1083,7 @@ The number indicates in how many parts to cut.</string>
                  </property>
                 </widget>
                </item>
-               <item row="11" column="0">
+               <item row="12" column="0">
                 <widget class="QPushButton" name="button_line_to_sketch">
                  <property name="toolTip">
                   <string>Transform Line(s) in Sketch's Line(s) by projection onto the Sketch's Plane:
@@ -1069,46 +1117,6 @@ Then click on this button.</string>
                <string>Circle</string>
               </attribute>
               <layout class="QGridLayout" name="gridLayout_5">
-               <item row="2" column="0">
-                <widget class="QPushButton" name="button_3points_circle">
-                 <property name="toolTip">
-                  <string>Select 3 Points  to create a Circle.</string>
-                 </property>
-                 <property name="text">
-                  <string>Circle=(3 points)</string>
-                 </property>
-                 <property name="icon">
-                  <iconset>
-                   <normaloff>../Icons/WF_3pointsCircle.svg</normaloff>../Icons/WF_3pointsCircle.svg</iconset>
-                 </property>
-                 <property name="iconSize">
-                  <size>
-                   <width>32</width>
-                   <height>32</height>
-                  </size>
-                 </property>
-                </widget>
-               </item>
-               <item row="3" column="0">
-                <widget class="QPushButton" name="button_3points_ellipse">
-                 <property name="toolTip">
-                  <string>Select a center and 2 Points to create an Ellipse.</string>
-                 </property>
-                 <property name="text">
-                  <string>Ellipse=(3 points)</string>
-                 </property>
-                 <property name="icon">
-                  <iconset>
-                   <normaloff>../Icons/WF_3pointsEllipse.svg</normaloff>../Icons/WF_3pointsEllipse.svg</iconset>
-                 </property>
-                 <property name="iconSize">
-                  <size>
-                   <width>32</width>
-                   <height>32</height>
-                  </size>
-                 </property>
-                </widget>
-               </item>
                <item row="1" column="0">
                 <widget class="QPushButton" name="button_linepoint_circle">
                  <property name="toolTip">
@@ -1121,6 +1129,83 @@ centered on the Axis and tangenting the Point.</string>
                  <property name="icon">
                   <iconset>
                    <normaloff>../Icons/WF_linePointCircle.svg</normaloff>../Icons/WF_linePointCircle.svg</iconset>
+                 </property>
+                 <property name="iconSize">
+                  <size>
+                   <width>32</width>
+                   <height>32</height>
+                  </size>
+                 </property>
+                </widget>
+               </item>
+               <item row="3" column="0">
+                <layout class="QHBoxLayout" name="horizontalLayout_24">
+                 <item>
+                  <widget class="QPushButton" name="button_cut_circle">
+                   <property name="toolTip">
+                    <string>Create Arcs:
+Cut the selected Circle(s) or Arc(s) in 2(n) parts and create 2(n) Arcs.
+The number indicates in how many parts to cut.
+- First select as many Circles and Arcs you want
+- Second set the number of parts
+- Third push this button</string>
+                   </property>
+                   <property name="text">
+                    <string>Arcs=Cut(Circle)</string>
+                   </property>
+                   <property name="icon">
+                    <iconset>
+                     <normaloff>../Icons/WF_cutCircle.svg</normaloff>../Icons/WF_cutCircle.svg</iconset>
+                   </property>
+                   <property name="iconSize">
+                    <size>
+                     <width>32</width>
+                     <height>32</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QSpinBox" name="spin_circle_cut">
+                   <property name="minimumSize">
+                    <size>
+                     <width>40</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                   <property name="maximumSize">
+                    <size>
+                     <width>50</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                   <property name="toolTip">
+                    <string>The number indicates in how many parts the selected Circle will be cut.</string>
+                   </property>
+                   <property name="minimum">
+                    <number>2</number>
+                   </property>
+                   <property name="maximum">
+                    <number>10</number>
+                   </property>
+                   <property name="singleStep">
+                    <number>1</number>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item row="2" column="0">
+                <widget class="QPushButton" name="button_3points_circle">
+                 <property name="toolTip">
+                  <string>Select 3 Points  to create a Circle.</string>
+                 </property>
+                 <property name="text">
+                  <string>Circle=(3 points)</string>
+                 </property>
+                 <property name="icon">
+                  <iconset>
+                   <normaloff>../Icons/WF_3pointsCircle.svg</normaloff>../Icons/WF_3pointsCircle.svg</iconset>
                  </property>
                  <property name="iconSize">
                   <size>
@@ -1179,7 +1264,27 @@ with the given radius.</string>
                 </layout>
                </item>
                <item row="4" column="0">
-                <spacer name="verticalSpacer_10">
+                <widget class="QPushButton" name="button_3points_ellipse">
+                 <property name="toolTip">
+                  <string>Select a center and 2 Points to create an Ellipse.</string>
+                 </property>
+                 <property name="text">
+                  <string>Ellipse=(3 points)</string>
+                 </property>
+                 <property name="icon">
+                  <iconset>
+                   <normaloff>../Icons/WF_3pointsEllipse.svg</normaloff>../Icons/WF_3pointsEllipse.svg</iconset>
+                 </property>
+                 <property name="iconSize">
+                  <size>
+                   <width>32</width>
+                   <height>32</height>
+                  </size>
+                 </property>
+                </widget>
+               </item>
+               <item row="5" column="0">
+                <spacer name="verticalSpacer_9">
                  <property name="orientation">
                   <enum>Qt::Vertical</enum>
                  </property>
@@ -1242,26 +1347,6 @@ with the given radius.</string>
                  </property>
                 </widget>
                </item>
-               <item row="9" column="0">
-                <widget class="QPushButton" name="button_object_center_planes">
-                 <property name="toolTip">
-                  <string>Create 3 Planes (XY, XZ and YZ) at center location of all selected Object(s).</string>
-                 </property>
-                 <property name="text">
-                  <string>Object(s) Center Planes</string>
-                 </property>
-                 <property name="icon">
-                  <iconset>
-                   <normaloff>Icons/WF_centerObjectsPlanes.svg</normaloff>Icons/WF_centerObjectsPlanes.svg</iconset>
-                 </property>
-                 <property name="iconSize">
-                  <size>
-                   <width>32</width>
-                   <height>32</height>
-                  </size>
-                 </property>
-                </widget>
-               </item>
                <item row="0" column="0">
                 <widget class="QPushButton" name="button_threepoints_plane">
                  <property name="toolTip">
@@ -1281,52 +1366,6 @@ with the given radius.</string>
                   </size>
                  </property>
                 </widget>
-               </item>
-               <item row="3" column="0">
-                <layout class="QGridLayout" name="gridLayout_16">
-                 <item row="0" column="0">
-                  <widget class="QPushButton" name="button_planeandpoint_plane">
-                   <property name="toolTip">
-                    <string>Create a plane crossing a Point and parallel to a Plane.</string>
-                   </property>
-                   <property name="text">
-                    <string>Plane=(Point, Plane)</string>
-                   </property>
-                   <property name="icon">
-                    <iconset>
-                     <normaloff>Icons/WF_pointPlanePoint.svg</normaloff>Icons/WF_pointPlanePoint.svg</iconset>
-                   </property>
-                   <property name="iconSize">
-                    <size>
-                     <width>32</width>
-                     <height>32</height>
-                    </size>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="0" column="1">
-                  <widget class="QLineEdit" name="extension_planePointPlane">
-                   <property name="minimumSize">
-                    <size>
-                     <width>40</width>
-                     <height>0</height>
-                    </size>
-                   </property>
-                   <property name="maximumSize">
-                    <size>
-                     <width>60</width>
-                     <height>16777215</height>
-                    </size>
-                   </property>
-                   <property name="toolTip">
-                    <string>Distance for the extensions of the new Plane compared to initial one.</string>
-                   </property>
-                   <property name="text">
-                    <string>0.0</string>
-                   </property>
-                  </widget>
-                 </item>
-                </layout>
                </item>
                <item row="5" column="0">
                 <layout class="QHBoxLayout" name="horizontalLayout_12">
@@ -1417,6 +1456,65 @@ then click on a location on the selected object.</string>
                  </item>
                 </layout>
                </item>
+               <item row="6" column="0">
+                <spacer name="verticalSpacer_8">
+                 <property name="orientation">
+                  <enum>Qt::Vertical</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>20</width>
+                   <height>40</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+               <item row="3" column="0">
+                <layout class="QGridLayout" name="gridLayout_16">
+                 <item row="0" column="0">
+                  <widget class="QPushButton" name="button_planeandpoint_plane">
+                   <property name="toolTip">
+                    <string>Create a plane crossing a Point and parallel to a Plane.</string>
+                   </property>
+                   <property name="text">
+                    <string>Plane=(Point, Plane)</string>
+                   </property>
+                   <property name="icon">
+                    <iconset>
+                     <normaloff>Icons/WF_pointPlanePoint.svg</normaloff>Icons/WF_pointPlanePoint.svg</iconset>
+                   </property>
+                   <property name="iconSize">
+                    <size>
+                     <width>32</width>
+                     <height>32</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="1">
+                  <widget class="QLineEdit" name="extension_planePointPlane">
+                   <property name="minimumSize">
+                    <size>
+                     <width>40</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                   <property name="maximumSize">
+                    <size>
+                     <width>60</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                   <property name="toolTip">
+                    <string>Distance for the extensions of the new Plane compared to initial one.</string>
+                   </property>
+                   <property name="text">
+                    <string>0.0</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
                <item row="4" column="0">
                 <layout class="QGridLayout" name="gridLayout_8">
                  <item row="0" column="0">
@@ -1474,6 +1572,26 @@ then click on a location on the selected object.</string>
                   </widget>
                  </item>
                 </layout>
+               </item>
+               <item row="9" column="0">
+                <widget class="QPushButton" name="button_object_center_planes">
+                 <property name="toolTip">
+                  <string>Create 3 Planes (XY, XZ and YZ) at center location of all selected Object(s).</string>
+                 </property>
+                 <property name="text">
+                  <string>Object(s) Center Planes</string>
+                 </property>
+                 <property name="icon">
+                  <iconset>
+                   <normaloff>Icons/WF_centerObjectsPlanes.svg</normaloff>Icons/WF_centerObjectsPlanes.svg</iconset>
+                 </property>
+                 <property name="iconSize">
+                  <size>
+                   <width>32</width>
+                   <height>32</height>
+                  </size>
+                 </property>
+                </widget>
                </item>
                <item row="8" column="0">
                 <spacer name="verticalSpacer_11">
@@ -1579,19 +1697,6 @@ Define the width and the length of the Plane if needed.
                   </widget>
                  </item>
                 </layout>
-               </item>
-               <item row="6" column="0">
-                <spacer name="verticalSpacer_8">
-                 <property name="orientation">
-                  <enum>Qt::Vertical</enum>
-                 </property>
-                 <property name="sizeHint" stdset="0">
-                  <size>
-                   <width>20</width>
-                   <height>40</height>
-                  </size>
-                 </property>
-                </spacer>
                </item>
               </layout>
              </widget>
@@ -2231,12 +2336,12 @@ and push this button to accept...
                <item row="1" column="0">
                 <widget class="QPushButton" name="button_isPerpendicular">
                  <property name="toolTip">
-                  <string>Check if two faces are Perpendicular:
-- Select the 2 faces/planes and
+                  <string>Check if two faces or two Edges are Perpendicular:
+- Select the 2 faces/planes or 2 Edges/Lines and
 Click this button</string>
                  </property>
                  <property name="text">
-                  <string>Faces Perpendicular</string>
+                  <string>are Perpendicular ?</string>
                  </property>
                  <property name="icon">
                   <iconset>
@@ -2253,12 +2358,12 @@ Click this button</string>
                <item row="0" column="0">
                 <widget class="QPushButton" name="button_isParallel">
                  <property name="toolTip">
-                  <string>Check if two faces are Parallel:
-- Select the 2 faces/planes and
+                  <string>Check if two faces or two Edges are Parallel:
+- Select the 2 faces/planes or 2 Edges/Lines and
 Click this button</string>
                  </property>
                  <property name="text">
-                  <string>Faces Parallel</string>
+                  <string>are Parallel ?</string>
                  </property>
                  <property name="icon">
                   <iconset>
@@ -2275,12 +2380,12 @@ Click this button</string>
                <item row="2" column="0">
                 <widget class="QPushButton" name="button_isCoplanar">
                  <property name="toolTip">
-                  <string>Check if two faces are Coplanar:
-- Select the 2 faces/planes and
+                  <string>Check if two faces or two Edges are Coplanar:
+- Select the 2 faces/planes or 2 Edges/Lines and
 Click this button</string>
                  </property>
                  <property name="text">
-                  <string>Faces Coplanar</string>
+                  <string>are Coplanar ?</string>
                  </property>
                  <property name="icon">
                   <iconset>
