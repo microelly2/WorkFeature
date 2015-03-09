@@ -5531,6 +5531,7 @@ class WorkFeatureTab():
                              "button_point_line_axis"      : "plot_pointLineAxis",
                              "button_line_point_axis"      : "plot_linePointAxis",
                              "button_line_plane_axis"      : "plot_linePlaneAxis",
+                             "button_plane_point_line_axis": "plot_planeLinePointAxis",
                              "button_twoplanes_axis"       : "plot_2PlanesAxis",
                              "button_click_for_axis"       : "plot_clickForAxis",                             
                              "button_object_base_axes"     : "plot_baseObjectAxes",
@@ -5539,6 +5540,7 @@ class WorkFeatureTab():
                              "button_linecenter_circle"    : "plot_linecenterCircle",
                              "button_linepoint_circle"     : "plot_linepointCircle",
                              "button_3points_circle"       : "plot_3pointsCircle",
+                             "button_cut_circle"           : "plot_cutCircle",
                              "button_3points_ellipse"      : "plot_3pointsEllipse",                          
                                                           
                              "button_threepoints_plane"    : "plot_3PointsPlane",
@@ -5569,7 +5571,8 @@ class WorkFeatureTab():
                                                           
                             } 
                             
-        self.connections_for_text_changed = { 
+        self.connections_for_text_changed = {
+                             "tolerance_edit"            : "setTolerance",
                              "distance_point_on_line"    : "distanceLinePoint",
                              
                              "extension_twopoints_axis"  : "extensionTwoPointsAxis",
@@ -5593,11 +5596,13 @@ class WorkFeatureTab():
                              "width_plane"               : "widthPlane",
                              "length_plane_2"            : "lengthPlane",
                              "width_plane_2"             : "widthPlane",
+                             
                             }
                             
         self.connections_for_spin_changed = {
                              "spin_line_center"          : "numberLinePart",
                              "spin_axis_cut"             : "numberLineCut",
+                             "spin_circle_cut"           : "numberCircleCut",
                             }
                             
         self.connections_for_radiobutton_clicked = {                     
