@@ -10,7 +10,7 @@
 *   galou_breizh for macro which creates a circle from 3 selected points  *
 *   Eriossoltero for macro Ellipse-Center+2Points                         *
 *   Many Thanks to wmayer for his active help on testing and debbuging    *
-*   Special thanks to Mario52 for FCCamera code, cutCircle...             * 
+*   Special thanks to Mario52 for FCCamera code, cutCircle, cutWire...    * 
 *      for bounding box codes, advices, diverse pieces of codes           * 
 *      and all discussions...merci Mario                                  *
 ***************************************************************************
@@ -51,7 +51,7 @@ if not sys.path.__contains__("/usr/lib/freecad/lib"):
  
 import WFGui_2015 as WFGui
 global myRelease
-myRelease = "2105_03_08"
+myRelease = "2105_03_15"
 
 import os.path
 import math
@@ -89,9 +89,13 @@ global verbose
 verbose=0
 global tolerance
 tolerance=1e-10
+global biColor
+biColor=0
 
 m_numberLinePart = 2
 m_numberLineCut = 2
+m_numberPointCutWire = 2
+m_numberAxisCutWire = 2
 m_numberCircleCut = 2
 m_distanceLinePoint = 0.0
 m_extensionTwoPointsAxis = 0.0
@@ -217,6 +221,7 @@ def print_segment(segment, msg=""):
               "z2 =" + str(point2.z))
     return
 
+
 def verbose_toggled(flag):
     """ Respond to the change of verbose flag.
     """
@@ -224,6 +229,21 @@ def verbose_toggled(flag):
     verbose=0
     if flag == True:
         verbose=1
+    print_msg("verbose flag is : " + str(verbose))
+
+        
+def biColor_toggled(flag):
+    """ Respond to the change of biColor flag.
+    """
+    global verbose
+    msg=verbose
+    global biColor
+    biColor=0
+    if flag == True:
+        biColor=1
+    if msg != 0:
+        print_msg("biColor flag is : " + str(biColor))
+
 
 def init_min_max():
     """ Return min and max values from System.
@@ -239,14 +259,15 @@ def init_min_max():
     return min_val, max_val
 
 
-def alignCamera(sub0,sub1,reverse=False,info=0):
-    """ Align the camera along an Axis crossing 2 points.
+def alignCamera(point1,point2,reverse=False,info=0):
+    """ Align the camera along an Axis crossing the 2 points in input.
+    reverse=True to exchange points 1 and 2
     """
     # Build vectors difference
     if reverse:
-        v=sub0.sub(sub1)
+        v=point1.sub(point2)
     else:
-        v=sub1.sub(sub0)
+        v=point2.sub(point1)
     if info != 0:
         print_msg("Vectors difference is :" + str(v)) 
     r=App.Rotation(App.Vector(0,0,1),v)
@@ -1819,7 +1840,7 @@ def plot_centerLinePoint():
     part = "Part::Feature"
     
     global m_numberLinePart
-    if not (m_numberLinePart >= 2 and m_numberLinePart <= 10) :
+    if not (m_numberLinePart >= 2 and m_numberLinePart <= 100) :
         m_numberLinePart = 2
     Selection = get_SelectedObjects(info=msg, printError=False)    
     try:        
@@ -2180,6 +2201,149 @@ def plot_2LinesPoint():
         printError_msg(error_msg)
 
 
+def numberPointCutWire(value):
+    """ Respond to the change in number of cut value from the spin box.
+    """
+    global verbose
+    msg=verbose
+        
+    try:
+        # First we check if a valid number have been entered
+        global m_numberPointCutWire
+        if str(value) == '-':
+            return
+        m_numberPointCutWire  = int(value)
+        if msg != 0:
+            print_msg("New number is :" + str(m_numberPointCutWire))
+    except ValueError:
+        printError_msg("Number must be valid !")   
+
+
+def cutWire(numberOfPoints, createPoint=1, createLine=0):
+    """ Partition a Wire and create points, lines, with possible two colours of line. 
+
+    Original code from : Mario52 03/2015
+    Adapted to WF by   : Rentlau_64 03/2015
+    """
+    
+    def createLines(number, listOfPoints):
+        """ Create line
+        """
+        global biColor
+        m_points = listOfPoints
+        m_numberOfLines = number - 1
+        m_biColor = biColor
+        if msg != 0:
+            print_msg("Number of Lines  =" + str(m_numberOfLines))
+            print_msg("Points  =" + str(m_points))
+            print_msg("biColor  =" + str(m_biColor))
+                                        
+        red = 0        
+        createFolders('WorkAxis')
+        for m_lin in range(m_numberOfLines):
+            Vector_A = Base.Vector(m_points[m_lin])
+            Vector_B = Base.Vector(m_points[m_lin+1])
+            #creaLine = [Vector_A,Vector_B]
+            axis_User_Name, axis = plot_axis(Vector_A, Vector_B, part="Part::Feature", name="Axis_Wire", grp="WorkAxis")
+            #wire = Draft.makeWire(creaLine,closed=False,face=False,support=None)
+            # Optional biColor
+            if m_biColor != 0 :
+                if red == 0:
+                    # 255 = 1 (10 = (1/255 * 10 ))
+                    #FreeCADGui.ActiveDocument.getObject(wire.Name).LineColor = (1.0,0.0,0.0)
+                    Gui.ActiveDocument.getObject(axis_User_Name).LineColor = (1.0,0.0,0.0)
+                    red = 1
+                else:
+                    #FreeCADGui.ActiveDocument.getObject(wire.Name).LineColor = (1.0,1.0,1.0)
+                    Gui.ActiveDocument.getObject(axis_User_Name).LineColor = (1.0,1.0,1.0)
+                    red = 0
+        
+    global verbose
+    msg=verbose
+    
+    m_actDoc = get_ActiveDocument(info=msg)
+    if m_actDoc == None:
+        return None
+
+    error_msg = "Unable to select Wire(s) : \nSelect at least one Edge\nor one Object !"
+    m_points = []
+    del m_points[:]
+    if msg != 0:
+        print_msg("Number of cuts  =" + str(numberOfPoints))
+        print_msg("CreatePoint flag=" + str(createPoint))
+        print_msg("CreateLine flag =" + str(createLine))
+    numberOfPoints += 1
+    
+    try:
+        selectionObjects = Gui.Selection.getSelectionEx()
+        if msg!=0:
+            print_msg("SelectionObjects is :" + str(selectionObjects))
+        found = 0
+        for sel in selectionObjects:
+            if msg!=0:
+                print_msg("Selection is :" + str(sel))
+            #if hasattr(sel,'SubObjects')
+            if sel.HasSubObjects:
+                if msg!=0:
+                    print_msg("Found SubObjects")
+                for sub in sel.SubObjects:
+                    if  hasattr(sub,'Edges'):
+                        compteur = 0
+                        for edge in sub.Edges:
+                            if msg!=0:
+                                print_msg("Edge is :" + str(edge))
+                            if  hasattr(edge,'discretize'):
+                                found = 1
+                                compteur += 1
+                                points = edge.discretize(numberOfPoints)
+                                for p in points:
+                                    if createPoint != 0:
+                                        plot_point(p, part="Part::Feature", name="Point_Wire", grp="WorkPoints")
+                                        #Draft.makePoint( p.x, p.y, p.z)
+                                    print_point(p, msg=str(compteur) +" :")
+                                if createLine != 0:
+                                    if msg!=0:
+                                        print_msg("createLines function call ")
+                                    createLines(numberOfPoints, points)
+                
+            else:
+                shape = sel.Object.Shape
+                if msg!=0:
+                    print_msg("Found NO SubObjects")
+                    print_msg("Shape is :" + str(shape))
+                
+                
+                if hasattr(shape,'Edges'):
+                    compteur = 0
+                    for edge in shape.Edges:
+                        if msg!=0:
+                            print_msg("Edge is :" + str(edge))
+                        if  hasattr(edge,'discretize'):
+                            found = 1
+                            compteur += 1
+                            points = edge.discretize(numberOfPoints)
+                            for p in points:
+                                if createPoint != 0:
+                                    plot_point(p, part="Part::Feature", name="Point_Wire", grp="WorkPoints")
+                                    #Draft.makePoint( p.x, p.y, p.z)
+                                print_point(p, msg=str(compteur) +" :")
+                            if createLine != 0:
+                                createLines(numberOfPoints, points)
+        if found == 0:
+            printError_msg(error_msg)            
+    except:
+        printError_msg(error_msg)
+    
+    return
+          
+def plot_cutWirePoint():
+    createFolders('WorkPoints')
+    global m_numberPointCutWire
+    if not (m_numberPointCutWire >= 2 and m_numberPointCutWire <= 100) :
+        m_numberPointCutWire = 2
+    cutWire(m_numberPointCutWire, createPoint=1, createLine=0)
+    
+    
 def plot_clickForPoint():
     """ Plot a Point at location of a mouse click. 
     """
@@ -2279,20 +2443,23 @@ def point_toSketch():
             # Get Point(s) from the selection
             for m_i in range(1,m_num):
                 m_obj = m_selEx[m_i]
-                SubObject = m_obj.SubObjects[0]
-                if SubObject.ShapeType == "Vertex":
-                    if msg != 0:
-                        print_msg("Found a Points object!")
-                    Point = m_obj.SubObjects[0]
-                    # Get the Point
-                    m_p = Point.Point
-                    # Projection of the Point selected onto the Sketch Plane
-                    Projection = m_p.projectToPlane(m_sketch.Placement.Base, m_recN)
-                    # Append the Projection
-                    geoList.append(Part.Point(Projection))
-                    # Add the geometry list to the Sketch
-                    m_sketch.addGeometry(geoList)
-                    m_num_point = m_num_point + 1                   
+                if len(m_obj.SubObjects) != 0:
+                    SubObject = m_obj.SubObjects[0]
+                    if SubObject.ShapeType == "Vertex":
+                        if msg != 0:
+                            print_msg("Found a Points object!")
+                        Point = m_obj.SubObjects[0]
+                        # Get the Point
+                        m_p = Point.Point
+                        # Projection of the Point selected onto the Sketch Plane
+                        Projection = m_p.projectToPlane(m_sketch.Placement.Base, m_recN)
+                        # Append the Projection
+                        geoList.append(Part.Point(Projection))
+                        # Add the geometry list to the Sketch
+                        m_sketch.addGeometry(geoList)
+                        m_num_point = m_num_point + 1                   
+                    else:
+                        continue
                 else:
                     continue
             # Refresh
@@ -2656,6 +2823,7 @@ def plot_2LinesAxis():
     except:
         printError_msg(error_msg)
 
+
 def numberLineCut(value):
     """ Respond to the change in number of cut value from the spin box.
     """
@@ -2681,6 +2849,8 @@ def plot_cutAxis():
     """
     global verbose
     msg=verbose
+    global biColor
+    red = 0
 
     m_actDoc = get_ActiveDocument(info=msg)
     if m_actDoc == None:
@@ -2693,7 +2863,7 @@ def plot_cutAxis():
     part = "Part::Feature"
     
     global m_numberLineCut
-    if not (m_numberLineCut >= 2 and m_numberLineCut <= 10) :
+    if not (m_numberLineCut >= 2 and m_numberLineCut <= 100) :
         m_numberLineCut = 2
     if msg != 0:
         print_msg("Number_of_cuts=" + str(m_numberLineCut))
@@ -2718,6 +2888,14 @@ def plot_cutAxis():
                         print_point(Vector_A,"Vector_A is : ")
                         print_point(Vector_B,"Vector_B is : ")
                     Axis_User_Name, axis = plot_axis(Vector_A, Vector_B, part, name)
+                    if biColor != 0:
+                        if red == 0:
+                            Gui.ActiveDocument.getObject(Axis_User_Name).LineColor = (1.0,0.0,0.0)
+                            red = 1
+                        else:
+                            Gui.ActiveDocument.getObject(Axis_User_Name).LineColor = (1.0,1.0,1.0) 
+                            red = 0
+                    
                     Vector_A = Vector_B
                 #Vector_B = edge.valueAt( edge.Length )
                 Vector_B = edge.Vertexes[-1].Point
@@ -2725,6 +2903,14 @@ def plot_cutAxis():
                     print_point(Vector_A,"Vector_A is : ")
                     print_point(Vector_B,"Vector_B is : ")
                 Axis_User_Name, axis = plot_axis(Vector_A, Vector_B, part, name)
+                if biColor != 0:
+                    if red == 0:
+                        Gui.ActiveDocument.getObject(Axis_User_Name).LineColor = (1.0,0.0,0.0)
+                        red = 1
+                    else:
+                        Gui.ActiveDocument.getObject(Axis_User_Name).LineColor = (1.0,1.0,1.0) 
+                        red = 0                
+                
                 print_msg(str(Axis_User_Name) + result_msg )
 
                 Gui.ActiveDocument.getObject(str(m_objNames[i])).Visibility=False    
@@ -2732,6 +2918,32 @@ def plot_cutAxis():
     except:
         printError_msg(error_msg)  
         
+
+def numberAxisCutWire(value):
+    """ Respond to the change in number of cut value from the spin box.
+    """
+    global verbose
+    msg=verbose
+        
+    try:
+        # First we check if a valid number have been entered
+        global m_numberAxisCutWire
+        if str(value) == '-':
+            return
+        m_numberAxisCutWire  = int(value)
+        if msg != 0:
+            print_msg("New number is :" + str(m_numberAxisCutWire))
+    except ValueError:
+        printError_msg("Number must be valid !")  
+
+
+def plot_cutWireAxis():
+    createFolders('WorkAxis')
+    global m_numberAxisCutWire
+    if not (m_numberAxisCutWire >= 2 and m_numberAxisCutWire <= 100) :
+        m_numberAxisCutWire = 2
+    cutWire(m_numberAxisCutWire, createPoint=0, createLine=1)
+
         
 def extensionLinePointAxis(value):
     """ Respond to the change in extension value from the text box.
@@ -3525,6 +3737,8 @@ def plot_cutCircle():
     """
     global verbose
     msg=verbose
+    global biColor
+    red = 0
 
     m_actDoc = get_ActiveDocument(info=msg)
     if m_actDoc == None:
@@ -3537,7 +3751,7 @@ def plot_cutCircle():
     part = "Part::Feature"
     
     global m_numberCircleCut
-    if not (m_numberCircleCut >= 2 and m_numberCircleCut <= 10) :
+    if not (m_numberCircleCut >= 2 and m_numberCircleCut <= 100) :
         m_numberCircleCut = 2
     if msg != 0:
         print_msg("Number of cuts=" + str(m_numberCircleCut))
@@ -3595,9 +3809,17 @@ def plot_cutCircle():
                        print_msg("Start at =" +str(pivot1))
                        print_msg("End   at =" +str(pivot2))     
                     Arc_User_Name, arc = plot_arc(center, normal, radius, pivot1, pivot2, part, name)
+                    if biColor != 0:
+                        if red == 0:
+                            Gui.ActiveDocument.getObject(Arc_User_Name).LineColor = (1.0,0.0,0.0)
+                            red = 1
+                        else:
+                            Gui.ActiveDocument.getObject(Arc_User_Name).LineColor = (1.0,1.0,1.0) 
+                            red = 0
                     pivot1 += pivot0
                 
                 print_msg(str(Arc_User_Name) + result_msg )
+                Gui.ActiveDocument.getObject(label).Visibility=False
 
             elif (label[:8] == "Cylinder"):
                 if msg != 0:
@@ -3629,7 +3851,7 @@ def plot_cutCircle():
                     First = float(piece.FirstAngle)
                     Last  = float(piece.LastAngle)
                 # Part::PartFeature
-                elif (label[:3] == "Arc") and hasattr(piece.Shape, 'Curve') and hasattr(piece.Shape.Curve, 'Radius'):
+                elif (label[:3] == "Arc") and hasattr(piece.Shape, 'Curve') and hasattr(piece.Shape.Curve, 'Radius'):                        
                     radius = piece.Shape.Curve.Radius
                     center = piece.Shape.Curve.Center
                     normal = piece.Shape.Curve.Axis
@@ -3649,10 +3871,18 @@ def plot_cutCircle():
                        print_msg("Start at =" +str(pivot1))
                        print_msg("End   at =" +str(pivot2))     
                     Arc_User_Name, arc = plot_arc(center, normal, radius, pivot1, pivot2, part, name)
+                    if biColor != 0:
+                        if red == 0:
+                            Gui.ActiveDocument.getObject(Arc_User_Name).LineColor = (1.0,0.0,0.0)
+                            red = 1
+                        else:
+                            Gui.ActiveDocument.getObject(Arc_User_Name).LineColor = (1.0,1.0,1.0) 
+                            red = 0                    
                     pivot1 += pivot0
                     
                 print_msg(str(Arc_User_Name) + result_msg )
-            Gui.ActiveDocument.getObject(label).Visibility=False    
+                Gui.ActiveDocument.getObject(label).Visibility=False
+                
         else:
             printError_msg(error_msg)
     
@@ -5454,7 +5684,75 @@ def object_perpendicular():
 def object_coplanar():
     two_objects_are("coplanar")
 
-          
+def object_clearance():
+    """
+    Check for two Objects Clearance distance:
+    Quick measurements between parallel faces and similarly placed objects
+
+    Original code from : Bill 03/2015
+    Adapted to WF by   : Rentlau_64 03/2015
+    """
+    global verbose
+    msg=verbose
+    
+    m_actDoc = get_ActiveDocument(info=msg)
+    if m_actDoc == None:
+        return None
+        
+    error_msg = "INCORRECT Object(s) Selection :\n\nYou Must Select Two(2) Objects !"
+    try:
+        selectionObjects = Gui.Selection.getSelectionEx()
+        if msg!=0:
+            print_msg("SelectionObjects is :" + str(selectionObjects))
+            print_msg("Number of objects is :" + str(len(selectionObjects)))
+        if len(selectionObjects) != 2:
+            printError_msg(error_msg)
+            return
+        OBJ1 = selectionObjects[0].ObjectName
+        OBJ2 = selectionObjects[1].ObjectName
+        
+        mindist  = App.ActiveDocument.getObject(OBJ1).Shape.distToShape(App.ActiveDocument.getObject(OBJ2).Shape)[0]
+        print_msg("Distance to Second Object is " + str(mindist) + "\n" )        
+        if mindist == 0.0:
+            msg = 'POSSIBLE COLLISION DETECTED \n\nCLEARANCE(S) <= 0 \n\nCheck Clearances and Settings !'
+        else:
+            msg = 'Object CLEARANCE is '+ str(mindist) +' units !'
+        print_gui_msg(msg)
+    except:
+        printError_msg(error_msg)    
+
+        
+def object_align2view():
+    """ Place your object selected to the position ActiveView (camera)
+    __author__ = "Mario52"
+    """
+    # revoir le point de rotation
+    msg=0
+    error_msg  = "Select one object !"
+    
+    m_actDoc = get_ActiveDocument(info=msg)
+    if m_actDoc == None:
+        return None
+        
+    m_num, m_selEx, m_objs, m_objNames = get_InfoObjects(info=msg)
+    Center = centerObjectsPoint(m_objs)
+    if Center != None:
+        pl = FreeCAD.Placement()
+        pl.Rotation = Gui.ActiveDocument.ActiveView.getCameraOrientation()
+        pl.Base = App.Vector(0,0,0)
+        for m_objName in m_objNames:           
+            App.ActiveDocument.getObject(m_objName).Placement=pl
+        
+    else:
+        printError_msg(error_msg)  
+        
+    #sel = Gui.Selection.getSelection()
+    #Nameelement = sel[0].Name
+    #pl = FreeCAD.Placement()
+    #pl.Rotation = Gui.ActiveDocument.ActiveView.getCameraOrientation()
+    #pl.Base = FreeCAD.Vector(0.0,0.0,0.0)
+    #App.ActiveDocument.getObject(Nameelement).Placement=pl
+   
            
 ####################################################################################   
 try:
@@ -5517,6 +5815,7 @@ class WorkFeatureTab():
                              "button_point_line_point"     : "plot_pointLinePoint",
                              "button_point_face_point"     : "plot_pointFacePoint",
                              "button_twolines_point"       : "plot_2LinesPoint",
+                             "button_cut_wire_point"       : "plot_cutWirePoint",
                              "button_click_for_point"      : "plot_clickForPoint",
                              "button_object_base_point"    : "plot_baseObjectPoint",
                              "button_point_to_sketch"      : "point_toSketch",
@@ -5528,6 +5827,7 @@ class WorkFeatureTab():
                              "button_face_normal"          : "plot_faceNormal",                            
                              "button_twolines_axis"        : "plot_2LinesAxis",
                              "button_cut_axis"             : "plot_cutAxis",
+                             "button_cut_wire_axis"        : "plot_cutWireAxis",
                              "button_point_line_axis"      : "plot_pointLineAxis",
                              "button_line_point_axis"      : "plot_linePointAxis",
                              "button_line_plane_axis"      : "plot_linePlaneAxis",
@@ -5568,7 +5868,8 @@ class WorkFeatureTab():
                              "button_isParallel"           : "object_parallel",
                              "button_isPerpendicular"      : "object_perpendicular",
                              "button_isCoplanar"           : "object_coplanar",
-                                                          
+                             "button_isClearance"          : "object_clearance",
+                            
                             } 
                             
         self.connections_for_text_changed = {
@@ -5602,11 +5903,14 @@ class WorkFeatureTab():
         self.connections_for_spin_changed = {
                              "spin_line_center"          : "numberLinePart",
                              "spin_axis_cut"             : "numberLineCut",
+                             "spin_wire_cut_point"       : "numberPointCutWire",
+                             "spin_wire_cut_axis"        : "numberAxisCutWire",
                              "spin_circle_cut"           : "numberCircleCut",
                             }
                             
         self.connections_for_radiobutton_clicked = {                     
                              "radioButton_verbose"       : "verbose_toggled",
+                             "radioButton_biColor"       : "biColor_toggled",
                             }
                             
         self.connections_for_combobox_changed = {
