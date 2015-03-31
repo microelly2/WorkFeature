@@ -50,8 +50,9 @@ if not sys.path.__contains__("/usr/lib/freecad/lib"):
     sys.path.append("/usr/lib/freecad/lib")     
  
 import WFGui_2015 as WFGui
+from   WF_ObjRot_2015 import *
 global myRelease
-myRelease = "2105_03_15"
+myRelease = "2105_03_31"
 
 import os.path
 import math
@@ -86,17 +87,22 @@ myObject = None
 global centerOfMass
 centerOfMass=True
 global verbose
-verbose=0
+verbose=1
 global tolerance
 tolerance=1e-10
 global biColor
 biColor=0
+global objCopy
+objCopy=0
 
 m_numberLinePart = 2
 m_numberLineCut = 2
 m_numberPointCutWire = 2
 m_numberAxisCutWire = 2
 m_numberCircleCut = 2
+m_numberPlane = 1
+m_numberLine = 1
+m_numberPoint = 1
 m_distanceLinePoint = 0.0
 m_extensionTwoPointsAxis = 0.0
 m_extensionLinePointAxis = 0.0
@@ -105,12 +111,17 @@ m_extensionFaceNormal = 0.0
 m_extensionPlanePointPlane = 0.0
 m_anglePlaneAxisPlane = 0.0
 m_lengthPlane = 10.0
+m_distPlane = 10.0
+m_distLine = 10.0
+m_distPoint = 10.0
 m_diameterCylinder = 2.0
 m_lengthCylinder = 20.0 
 m_lengthCube = 2.0
 m_widthCube = 2.0
 m_heightCube = 20.0 
 m_widthPlane = 10.0
+m_extensionPlane = 50.0
+m_extensionAxis = 50.0
 m_attach_point = "Mid"
 
 m_cut_selectObjects = []
@@ -230,8 +241,8 @@ def verbose_toggled(flag):
     if flag == True:
         verbose=1
     print_msg("verbose flag is : " + str(verbose))
-
-        
+ 
+       
 def biColor_toggled(flag):
     """ Respond to the change of biColor flag.
     """
@@ -243,6 +254,20 @@ def biColor_toggled(flag):
         biColor=1
     if msg != 0:
         print_msg("biColor flag is : " + str(biColor))
+
+
+def copy_toggled(flag):
+    """ Respond to the change of Object copy flag.
+    """
+    global verbose
+    msg=verbose
+    global objCopy
+    objCopy=0
+    if flag == True:
+        objCopy=1
+    if msg != 0:
+        print_msg("Object copy flag is : " + str(objCopy))
+
 
 
 def init_min_max():
@@ -294,6 +319,35 @@ def createFolders(folder=None):
                 except:
                     printError_msg("Could not Create '"+ str(m_dir) +"' Objects Group!")
     return
+
+
+def get_typefromSelection(objectType="Edge", info=0):
+
+    m_num_obj, m_selEx, m_objs, m_objNames = get_InfoObjects(info=0, printError=False)
+    m_found = False
+    for m_i_o in range(m_num_obj):
+        if m_found:
+            break
+        Sel_i_Object = m_selEx[m_i_o]
+        Obj_i_Object = m_objs[m_i_o]
+        Name_i_Object = m_objNames[m_i_o]
+        if info != 0:
+            print("Sel_i_Object  = " + str(Sel_i_Object))
+            print("Obj_i_Object  = " + str(Obj_i_Object))
+            print("Name_i_Object  = " + str(Name_i_Object ))
+        SubObjects_Inside = Sel_i_Object.SubObjects
+        for n in range(len(SubObjects_Inside)):
+            SubObject = SubObjects_Inside[n]
+            if info != 0:
+                print("SubObject  = " + str(SubObject))
+                print("SubObject.ShapeType  = " + str(SubObject.ShapeType))
+            if SubObject.ShapeType == "Edge":
+                m_found = True
+                break
+    if m_found:
+        return Sel_i_Object, Obj_i_Object, Name_i_Object
+    else:
+        return None, None, None
 
 
 def get_ActiveDocument(info=0):
@@ -350,6 +404,58 @@ def get_InfoObjects(info=0, printError=True):
                   ", m_objs=" + str(m_objs) +
                   ", m_objNames=" + str(m_objNames))
     return m_num, m_selEx, m_objs, m_objNames
+
+def get_SelectedObjectsWithParent(info=0, printError=True):
+    """ Return selected objects as
+        Selection = (Number_of_Points, Number_of_Edges, Number_of_Planes,
+                    Selected_Points, Selected_Edges, Selected_Planes)
+        but each subObject is then returned with its parent
+    """    
+    m_actDoc=get_ActiveDocument(info=1)
+    
+    if m_actDoc.Name:    
+        # Return a list of SelectionObjects for a given document name.
+        # "getSelectionEx" Used for selecting subobjects
+        m_selEx = Gui.Selection.getSelectionEx(m_actDoc.Name)
+        m_objs = [selobj.Object for selobj in m_selEx]
+        m_objNames = [selobj.ObjectName for selobj in m_selEx]
+        m_num = len(m_objs)  
+        m_num = len(m_selEx)
+        if m_num >= 1: 
+            Selected_Points = []
+            Selected_Edges = []
+            Selected_Planes = []
+            for m_i in range(m_num):        
+                Sel_i_Object = m_selEx[m_i]
+                Parent = Sel_i_Object.Object
+                SubObjects_Inside = Sel_i_Object.SubObjects
+                for n in range(len(SubObjects_Inside)):
+                    SubObject = SubObjects_Inside[n]
+                    if info != 0:
+                        message = "Processing : " + str(m_objNames[m_i]) + " : " + str(SubObject.ShapeType)
+                        print_msg(message)
+                    if SubObject.ShapeType == "Vertex":                        
+                        Selected_Points.append({SubObject:Parent})
+                    if SubObject.ShapeType == "Edge":
+                        Selected_Edges.append({SubObject:Parent}) 
+                    if SubObject.ShapeType == "Face":
+                        Selected_Planes.append({SubObject:Parent})
+            Number_of_Points = len(Selected_Points)
+            Number_of_Edges = len(Selected_Edges)
+            Number_of_Planes = len(Selected_Planes)
+            Selection = (Number_of_Points, Number_of_Edges, Number_of_Planes,
+                    Selected_Points, Selected_Edges, Selected_Planes)
+            if info != 0:
+                print_msg("Number_of_Points, Number_of_Edges, Number_of_Planes," +
+                           "Selected_Points, Selected_Edges, Selected_Planes = " + str(Selection))
+            return Selection
+        else:
+            if printError:
+                printError_msg("Select at least one object !")
+            return None
+    else:
+        printError_msg("No active document !")
+    return 
 
     
 def get_SelectedObjects(info=0, printError=True):
@@ -1219,7 +1325,84 @@ def intersecPlanePlane(Plane_Normal1, Plane_Point1, Plane_Normal2, Plane_Point2,
         return U
 
 #============================================================================== 
+def properties_point(Point_User_Name):
+    """ Define the properties of a Work feature Point.
+    PointColor
+    PointSize
+    Transparency  
+    """
+    try:
+        Gui.ActiveDocument.getObject(Point_User_Name).PointColor = (1.00,0.67,0.00)
+    except:
+        print_msg("Not able to set PointColor !")
+    try:
+        Gui.ActiveDocument.getObject(Point_User_Name).PointSize = 5.00 
+    except:
+        print_msg("Not able to set PointSize !")
+    try:
+        Gui.ActiveDocument.getObject(Point_User_Name).Transparency = 0
+    except:
+        print_msg("Not able to set Transparency !")
+        
+    return 
 
+
+def properties_line(Line_User_Name):
+    """ Define the properties of a Work feature Line.
+    PointColor
+    LineColor
+    LineWidth
+    PointSize
+    Transparency  
+    """
+    try:
+        Gui.ActiveDocument.getObject(Line_User_Name).PointColor = (1.00,0.67,0.00)
+    except:
+        print_msg("Not able to set PointColor !")
+    try:
+        Gui.ActiveDocument.getObject(Line_User_Name).LineColor = (1.00,0.67,0.00)
+    except:
+        print_msg("Not able to set LineColor !")
+    try:
+       Gui.ActiveDocument.getObject(Line_User_Name).LineWidth = 2.00 
+    except:
+        print_msg("Not able to set LineWidth !")
+    try:
+        Gui.ActiveDocument.getObject(Line_User_Name).PointSize = 2.00 
+    except:
+        print_msg("Not able to set PointSize !")
+    try:
+        Gui.ActiveDocument.getObject(Line_User_Name).Transparency = 0
+    except:
+        print_msg("Not able to set Transparency !")
+        
+    return  
+
+def properties_plane(Plane_User_Name):
+    """ Define the properties of a Work feature Plane.
+    PointColor
+    LineColor
+    ShapeColor
+    Transparency  
+    """
+    try:
+        Gui.ActiveDocument.getObject(Plane_User_Name).PointColor = (1.00,0.67,0.00)
+    except:
+        print_msg("Not able to set PointColor !")
+    try:
+        Gui.ActiveDocument.getObject(Plane_User_Name).LineColor = (1.00,0.67,0.00)
+    except:
+        print_msg("Not able to set LineColor !")
+    try:
+        Gui.ActiveDocument.getObject(Plane_User_Name).ShapeColor = (0.00,0.33,1.00)
+    except:
+        print_msg("Not able to set ShapeColor !")
+    try:
+        Gui.ActiveDocument.getObject(Plane_User_Name).Transparency = 75
+    except:
+        print_msg("Not able to set Transparency !")
+        
+    return
        
 def plot_point(Vector_point, part, name, grp="WorkPoints"):
     if not(App.ActiveDocument.getObject( grp )):
@@ -1227,9 +1410,8 @@ def plot_point(Vector_point, part, name, grp="WorkPoints"):
     point = App.ActiveDocument.addObject( part, name )
     point.Shape = Part.Vertex( Vector_point )
     App.ActiveDocument.getObject( grp ).addObject(point)
-    point_User_Name = point.Label                
-    Gui.ActiveDocument.getObject( point_User_Name ).PointColor = (1.00,0.67,0.00)
-    Gui.ActiveDocument.getObject( point_User_Name ).PointSize = 5.00
+    point_User_Name = point.Label
+    properties_point(point_User_Name)                
     return point_User_Name
 
 
@@ -1240,8 +1422,7 @@ def plot_axis(Vector_A, Vector_B, part, name, grp="WorkAxis"):
     axis.Shape = Part.makeLine(Vector_A, Vector_B)
     App.ActiveDocument.getObject( grp ).addObject(axis)
     axis_User_Name = axis.Label
-    Gui.ActiveDocument.getObject(axis_User_Name).LineColor = (1.00,0.67,0.00)
-    Gui.ActiveDocument.getObject(axis_User_Name).PointColor = (1.00,0.67,0.00)    
+    properties_line(axis_User_Name)    
     return axis_User_Name, axis 
 
 
@@ -1317,8 +1498,8 @@ def plot_ellipse(S1, S2, Center, part= "Part::Feature", name= "Ellipse", grp="Ci
     ellipse_User_Name = ellipse.Label    
     Gui.ActiveDocument.getObject(ellipse_User_Name).LineColor = (1.00,0.67,0.00)
     return ellipse_User_Name, ellipse
-       
-    
+
+   
 def plot_plane(Edge_Length1, Edge_Length2, Plane_Point, Plane_Normal, part, name, grp="WorkPlanes"):
     if not(App.ActiveDocument.getObject( grp )):
         App.ActiveDocument.addObject("App::DocumentObjectGroup", grp)
@@ -1333,10 +1514,14 @@ def plot_plane(Edge_Length1, Edge_Length2, Plane_Point, Plane_Normal, part, name
     
     App.ActiveDocument.getObject( grp ).addObject( plane )
     plane_User_Name = plane.Label
-    Gui.ActiveDocument.getObject( plane_User_Name ).PointColor = (1.00,0.67,0.00)
-    Gui.ActiveDocument.getObject( plane_User_Name ).LineColor = (1.00,0.67,0.00)
-    Gui.ActiveDocument.getObject( plane_User_Name ).ShapeColor = (0.00,0.33,1.00)
-    Gui.ActiveDocument.getObject( plane_User_Name ).Transparency = 75        
+    
+    properties_plane(plane_User_Name)
+#==============================================================================
+#     Gui.ActiveDocument.getObject( plane_User_Name ).PointColor = (1.00,0.67,0.00)
+#     Gui.ActiveDocument.getObject( plane_User_Name ).LineColor = (1.00,0.67,0.00)
+#     Gui.ActiveDocument.getObject( plane_User_Name ).ShapeColor = (0.00,0.33,1.00)
+#     Gui.ActiveDocument.getObject( plane_User_Name ).Transparency = 75        
+#==============================================================================
     return plane_User_Name, plane
     
 
@@ -2199,8 +2384,151 @@ def plot_2LinesPoint():
         
     except:
         printError_msg(error_msg)
+        
+        
+def numberPoint(value):
+    """ Respond to the change in number of point from the spin box.
+    """
+    global verbose
+    msg=verbose
+        
+    try:
+        # First we check if a valid number have been entered
+        global m_numberPoint
+        if str(value) == '-':
+            return
+        m_numberPoint  = int(value)
+        if m_numberPoint == 0:
+           m_numberPoint = 1 
+        if msg != 0:
+            print_msg("New number is :" + str(m_numberPoint))
+    except ValueError:
+        printError_msg("Number must be valid !")
+        
+        
+def distPoint(value):
+    """ Respond to the change in Distance between point value from the text box.
+    """
+    global verbose
+    msg=verbose        
+    try:
+        # First we check if a valid number have been entered
+        global m_distPoint
+        if str(value) == '-':
+            return
+        m_distPoint  = float(value)
+        if msg != 0:
+            print_msg("New Distance between point is :" + str(m_distPoint))
+    except ValueError:
+        printError_msg("Distance between point must be valid number !")
+        
+        
+def plot_distPoint():
+    """ Axes=(Axis,Pt,dist)):
+        Create an Axis parallel to a given Axis, Point at a given distance.
+        The Axis is created on the Plane defined by the given Axis and Point.
+        - First select an Axis (or several Axes) and a Point 
+        (you can also select several points to define different Planes)
 
+        NB: The distance to the Axis created can be defined first.
+        Positive number in one direction and negative in the other one.
+        The second number indicates the number of Axes to create.
+                
+        If an Edge of a Cube is selected the Cube is duplicate with the corresponding
+    """
+    global verbose
+    global m_numberPoint
+    global m_distPoint
+    msg=verbose
+    createFolders('WorkPoints')
+    error_msg = "Unable to create Point(s) : \nSelect one (or several) Point and one or several Lines"
+    result_msg = " : Point(s) created !"
+        
+    Selection = get_SelectedObjectsWithParent(info=msg, printError=False)
+    
+    try:
+        SelectedObjects = Selection
+        Number_of_Points = SelectedObjects[0]
+        Number_of_Edges = SelectedObjects[1]
 
+        if  (Number_of_Edges >= 1) and (Number_of_Points >= 1):
+            Edge_List = SelectedObjects[4]
+            Points_List = SelectedObjects[3]
+            if msg !=0:
+                print_msg("Number_of_Points = " + str(Number_of_Points))
+                print_msg("Number_of_Edges = " + str(Number_of_Edges))
+                print_msg("Point List = " + str(Points_List)) 
+                print_msg("Edge List = " + str(Edge_List))
+                
+            # Loop on the Points
+            for Selected_Point_dict in Points_List:
+                if msg != 0:
+                    print_msg("Selected_Point_dict = " + str(Selected_Point_dict))
+                for Selected_Point, Parent_Point in Selected_Point_dict.iteritems():
+                    if msg != 0:
+                        print_msg("Selected_Point = " + str(Selected_Point))
+                        print_msg("Parent_Point = " + str(Parent_Point))
+                    Point_C = Selected_Point.Point
+                    if msg !=0:
+                        print_point(Point_C, msg="Point_C : ")
+                    Placement1 = Selected_Point.Placement
+                    #Placement1 = Parent_Point.Placement
+                    base1 = Placement1.Base
+                    #base1 = Point_C
+                    rot1 = Placement1.Rotation
+                    center_Vector = Point_C
+                    m_move = Base.Vector(0, 0, 0)
+                    Move_Vector = Base.Vector(0, 0, 0)
+                    # Loop on the Edges
+                    for Selected_Edge_dict in Edge_List:                    
+                        for Selected_Edge, Parent_Edge in Selected_Edge_dict.iteritems():
+                            if msg != 0:
+                                print_msg("Selected_Edge = " + str(Selected_Edge))
+                                print_msg("Parent_Edge = " + str(Parent_Edge))
+                                
+                            Point_A = Selected_Edge.Vertexes[0].Point
+                            Point_B = Selected_Edge.Vertexes[-1].Point 
+                            if msg !=0:
+                                print_point(Point_A, msg="Selected_Edge.Vertexes[0]  Point_A : ")
+                                print_point(Point_B, msg="Selected_Edge.Vertexes[-1] Point_B : ")
+                            AB_Vector = Point_B.sub(Point_A)
+                            AB_Vector = AB_Vector.normalize()
+                            # plot_axis(Base.Vector(0, 0, 0), AB_Vector, "Part::Feature", "AB")
+                            Move_Vector = AB_Vector.multiply(m_distPoint)
+                            Move_Vector = Move_Vector.add(center_Vector)
+                            # plot_axis(Base.Vector(0, 0, 0), Move_Vector, "Part::Feature", "Move_Vector")
+                            m_move = Move_Vector.sub(center_Vector)
+                             
+                            if msg != 0:
+                                print_point(Move_Vector, msg="Move_Vector = ")
+                                print_point(m_move, msg="m_move = ")
+                                print_msg("m_numberPoint  = " + str(m_numberPoint))
+                                    
+                            for m_i in range(m_numberPoint):
+#==============================================================================
+#                                 if objCopy == 1:
+#                                     m_new_point = App.activeDocument().copyObject(Parent_Point)                  
+#                                 else:
+#==============================================================================
+                                m_new_point_shape = Selected_Point.copy()
+                                m_new_point = App.ActiveDocument.addObject("Part::Feature", "Point_at_distance")
+                                m_new_point.Shape = m_new_point_shape
+                                App.ActiveDocument.getObject('WorkPoints').addObject(m_new_point)
+                                Point_User_Name = m_new_point.Label
+
+                                newplace1 = App.Placement(m_move, rot1 )
+                                m_new_point.Placement = newplace1
+                                # Update the move
+                                m_move = m_move.add(Move_Vector.sub(center_Vector))
+ 
+                                properties_point(Point_User_Name)
+                                print_msg(str(Point_User_Name) + result_msg ) 
+
+        else: 
+            printError_msg(error_msg)
+    except:
+        printError_msg(error_msg)
+    
 def numberPointCutWire(value):
     """ Respond to the change in number of cut value from the spin box.
     """
@@ -3266,7 +3594,63 @@ def plot_linePlaneAxis():
             printError_msg(error_msg) 
     except:
         printError_msg(error_msg)
-        
+
+
+def extensionAxis(value):
+    """ Respond to the change in Axis extension value from the text box.
+    """        
+    try:
+        # First we check if a valid number have been entered
+        global m_extensionAxis
+        m_extensionAxis  = float(value)
+        print_msg("New Axis extension is :" + str(m_extensionAxis))
+    except ValueError:
+        printError_msg("Axis extension must be valid number 5percentage)!")
+
+
+def plot_extensionAxis():
+    """ Extend an Axis at two extrema
+    """
+    global verbose
+    msg=verbose
+    createFolders('WorkAxis')
+    error_msg = "Unable to create Axis : \nSelect Axis(es) only !"
+    result_msg = " : Axis created !"
+    name = "Axis_extended"
+    part = "Part::Feature"
+    global m_extensionAxis
+    Selection = get_SelectedObjects(info=msg, printError=False)
+    try:
+        SelectedObjects = Selection
+        Number_of_Edges = SelectedObjects[1]
+        if msg !=0:
+            print_msg("Number_of_Edges=" + str(Number_of_Edges) )
+        if Number_of_Edges >= 1:
+            Edge_List = SelectedObjects[4]
+            if msg !=0:
+                print_msg("Edge_List=" + str(Edge_List))
+            for Selected_Edge in Edge_List:
+                if msg !=0:
+                    print_msg("Selected_Edge=" + str(Selected_Edge))
+                Point_A = Selected_Edge.Vertexes[0].Point
+                Point_B = Selected_Edge.Vertexes[-1].Point
+                if msg !=0:
+                    print_point(Point_A, msg="Selected_Edge.Vertexes[0]  Point_A : ")
+                    print_point(Point_B, msg="Selected_Edge.Vertexes[-1] Point_B : ") 
+                AB_Vector = Point_B.sub(Point_A)
+                demi_add_length = Selected_Edge.Length * ((m_extensionAxis/50))
+                add_Vector = AB_Vector.normalize().multiply(demi_add_length)
+                Point_A = Point_A.sub(add_Vector)
+                Point_B = Point_B.add(add_Vector)
+                
+                Axis_User_Name, axis = plot_axis(Point_A, Point_B, part, name)
+
+                print_msg(str(Axis_User_Name) + result_msg )
+        else:
+            printError_msg(error_msg)
+                
+    except:
+        printError_msg(error_msg) 
 
 def plot_clickForAxis():
     """ Plot an axis at location of 2 mouse clicks. 
@@ -3290,7 +3674,11 @@ def plot_clickForAxis():
         del m_stack[:]
         view.removeEventCallback("SoMouseButtonEvent",m_callback)
     m_clickForAxis = not m_clickForAxis
-    
+
+
+
+ 
+       
 def plot_2PlanesAxis():
     """ Plot the intersection Axis between two planes.
     """
@@ -3401,7 +3789,157 @@ def plot_2PlanesAxis():
     except:
         printError_msg(error_msg) 
 
+
+def numberLine(value):
+    """ Respond to the change in number of line from the spin box.    
+    """
+    global verbose
+    msg=verbose
+        
+    try:
+        # First we check if a valid number have been entered
+        global m_numberLine
+        if str(value) == '-':
+            return
+        m_numberLine  = int(value)
+        if m_numberLine == 0:
+           m_numberLine = 1 
+        if msg != 0:
+            print_msg("New number is :" + str(m_numberLine))
+    except ValueError:
+        printError_msg("Number must be valid !")
+
+
+def distLine(value):
+    """ Respond to the change in Distance between line value from the text box.
+    """
+    global verbose
+    msg=verbose        
+    try:
+        # First we check if a valid number have been entered
+        global m_distLine
+        if str(value) == '-':
+            return
+        m_distLine  = float(value)
+        if msg != 0:
+            print_msg("New Distance between lines is :" + str(m_distLine))
+    except ValueError:
+        printError_msg("Distance between plane must be valid number !")
+
+  
+def plot_distLine():
+    """ Axes=(Axis,Pt,dist)):
+        Create an Axis parallel to a given Axis, Point at a given distance.
+        The Axis is created on the Plane defined by the given Axis and Point.
+        - First select an Axis (or several Axes) and a Point 
+        (you can also select several points to define different Planes)
+
+        NB: The distance to the Axis created can be defined first.
+        Positive number in one direction and negative in the other one.
+        The second number indicates the number of Axes to create.
+                
+        If an Edge of a Cube is selected the Cube is duplicate with the corresponding
+        Edge at the defined distance from the original.
+    """
+    global verbose
+    global m_numberLine
+    global m_distLine
+    msg=verbose
+    createFolders('WorkAxis')
+    error_msg = "Unable to create Line(s) : \nSelect one (or several) Line and one or several Points\nwith Point(s) NOT on the Line!"
+    result_msg = " : Line(s) created !"
+
+    Selection = get_SelectedObjectsWithParent(info=msg, printError=False)
     
+    try:
+        SelectedObjects = Selection
+        Number_of_Points = SelectedObjects[0]
+        Number_of_Edges = SelectedObjects[1]
+        
+        if  (Number_of_Edges >= 1) and (Number_of_Points >= 1):
+            Edge_List = SelectedObjects[4]
+            Points_List = SelectedObjects[3]
+            if msg !=0:
+                print_msg("Number_of_Points = " + str(Number_of_Points))
+                print_msg("Number_of_Edges = " + str(Number_of_Edges))
+                print_msg("Point List = " + str(Points_List)) 
+                print_msg("Edge List = " + str(Edge_List))
+                
+            # Loop on the Edges
+            for Selected_Edge_dict in Edge_List:
+                if msg != 0:
+                    print_msg("Selected_Edge_dict = " + str(Selected_Edge_dict))
+                for Selected_Edge, Parent_Edge in Selected_Edge_dict.iteritems():
+                    if msg != 0:
+                        print_msg("Selected_Edge = " + str(Selected_Edge))
+                        print_msg("Parent_Edge = " + str(Parent_Edge))           
+
+                    Point_A = Selected_Edge.Vertexes[0].Point
+                    Point_B = Selected_Edge.Vertexes[-1].Point 
+                    if msg !=0:
+                        print_point(Point_A, msg="Selected_Edge.Vertexes[0]  Point_A : ")
+                        print_point(Point_B, msg="Selected_Edge.Vertexes[-1] Point_B : ")
+                    Placement1 = Selected_Edge.Placement
+                    base1 = Placement1.Base
+                    rot1 = Placement1.Rotation
+                    AB_Vector = Point_B.sub(Point_A)
+                    AB_Vector = AB_Vector.normalize()
+                    #plot_axis(Base.Vector(0, 0, 0), AB_Vector, "Part::Feature", "AB")
+                    center_Vector = centerLinePoint(Selected_Edge,info=msg)
+                    
+                    # Loop on the Points
+                    for Selected_Point_dict in Points_List:
+                        if msg != 0:
+                            print_msg("Selected_Point_dict = " + str(Selected_Point_dict))
+                        for Selected_Point, Parent_Point in Selected_Point_dict.iteritems():
+                            Point_C = Selected_Point.Point
+                            if msg !=0:
+                                print_point(Point_C, msg="Point_C : ")
+                                    
+                            AC_Vector = Point_C.sub(Point_A)
+                            AC_Vector = AC_Vector.normalize()
+                            #plot_axis(Base.Vector(0, 0, 0), AC_Vector, "Part::Feature", "AC")
+                            Plane_Normal = AB_Vector.cross( AC_Vector )
+                            Plane_Normal = Plane_Normal.normalize()
+                            #plot_axis(Base.Vector(0, 0, 0), Plane_Normal, "Part::Feature", "Plane_Normal")
+                            Move_Vector = Plane_Normal.cross( AB_Vector )
+                            #plot_axis(Base.Vector(0, 0, 0), Move_Vector, "Part::Feature", "Move_Vector")  
+                            Move_Vector = Move_Vector.normalize().multiply(m_distLine)
+                            Move_Vector = Move_Vector.add(center_Vector)
+                            #plot_axis(center_Vector, Move_Vector, "Part::Feature", "End_Move_Vector") 
+                            m_move = Move_Vector.sub(center_Vector)
+                            if msg != 0:
+                                print_point(Move_Vector, msg="Move_Vector = ")
+                                print_point(m_move, msg="m_move = ")
+                                print_msg("m_numberLine  = " + str(m_numberLine))                     
+                   
+                            for m_i in range(m_numberLine):
+                                if objCopy == 1:
+                                    m_new_line = App.activeDocument().copyObject(Parent_Edge)                  
+                                else:
+                                    m_new_line_shape = Selected_Edge.copy()
+                                    m_new_line = App.ActiveDocument.addObject("Part::Feature", "Line_at_distance")
+                                    m_new_line.Shape = m_new_line_shape
+                                App.ActiveDocument.getObject('WorkAxis').addObject(m_new_line)
+                                Line_User_Name = m_new_line.Label
+                   
+                                if msg != 0:
+                                    print_msg("m_new_line  = " + str(m_new_line))
+                                   
+                                newplace1 = App.Placement(base1.add(m_move), rot1 )
+                                m_new_line.Placement = newplace1
+                                # Update the move
+                                m_move = m_move.add(Move_Vector.sub(center_Vector))
+                               
+                                properties_line(Line_User_Name)
+                                print_msg(str(Line_User_Name) + result_msg )             
+        else: 
+            printError_msg(error_msg)         
+    except:
+        printError_msg(error_msg)
+
+
+      
 def plot_baseObjectAxes():
     msg=0
     createFolders('Origin')
@@ -3754,7 +4292,7 @@ def plot_cutCircle():
     if not (m_numberCircleCut >= 2 and m_numberCircleCut <= 100) :
         m_numberCircleCut = 2
     if msg != 0:
-        print_msg("Number of cuts=" + str(m_numberCircleCut))
+        print_msg("Number of cuts is:" + str(m_numberCircleCut))
     
     selection = Gui.Selection.getSelection()
     if msg != 0:
@@ -3985,7 +4523,7 @@ def plot_axisPointPlane():
     global verbose
     msg=verbose
     createFolders('WorkPlanes')
-    error_msg = "Unable to create Plane : \nSelect one Line and one Point only !"
+    error_msg = "Unable to create Plane : \nSelect one Line and one Point only, \nwith the Point NOT on the Line !"
     result_msg = " : Plane created !"
     name = "WorkPlane"
     part = "Part::Feature"
@@ -3995,15 +4533,15 @@ def plot_axisPointPlane():
         Number_of_Points = SelectedObjects[0]
         Number_of_Edges = SelectedObjects[1]
         if msg !=0:
-            print_msg("Number_of_Points=" + str(Number_of_Points) + \
-                      "\nNumber_of_Edges=" + str(Number_of_Edges))
+            print_msg("Number_of_Points = " + str(Number_of_Points) + \
+                      "\nNumber_of_Edges = " + str(Number_of_Edges))
         points = []
         if (Number_of_Points == 1) and (Number_of_Edges == 1):
             Points_List = SelectedObjects[3]
             Edge_List = SelectedObjects[4]
             if msg !=0:
-                print_msg(str(Points_List))
-                print_msg(str(Edge_List))
+                print_msg("Point list = " + str(Points_List))
+                print_msg("Edge list = " + str(Edge_List))
             Point_C = Points_List[0].Point
             points.append(Point_C)
             Point_A = Edge_List[0].valueAt(0.0)
@@ -4217,6 +4755,125 @@ def plot_planeAxisPlane():
         printError_msg(error_msg)
 
 
+def numberPlane(value):
+    """ Respond to the change in number of plane from the spin box.
+    """
+    global verbose
+    msg=verbose
+        
+    try:
+        # First we check if a valid number have been entered
+        global m_numberPlane
+        if str(value) == '-':
+            return
+        m_numberPlane  = int(value)
+        if m_numberPlane == 0:
+           m_numberPlane = 1 
+        if msg != 0:
+            print_msg("New number is :" + str(m_numberPlane))
+    except ValueError:
+        printError_msg("Number must be valid !")
+        
+        
+def distPlane(value):
+    """ Respond to the change in Distance between plane value from the text box.
+    """
+    global verbose
+    msg=verbose        
+    try:
+        # First we check if a valid number have been entered
+        global m_distPlane
+        if str(value) == '-':
+            return
+        m_distPlane  = float(value)
+        if msg != 0:
+            print_msg("New Distance between plane is :" + str(m_distPlane))
+    except ValueError:
+        printError_msg("Distance between plane must be valid number !")
+
+        
+def plot_distPlane():
+    """ Plane=(Plane,dist):
+        Create a Plane parallel to a Plane at a given distance.
+        - First select a plane or several Planes
+
+        NB: The distance to the plane created can be defined first.
+        Positive number in one direction and negative in the other one.
+        The second number indicates the number of planes to create.
+        
+        If a Face of a Cube is selected the Cube is duplicate with the corresponding
+        Face at the defined distance from the original.
+    """
+    global verbose
+    global objCopy
+    global m_numberPlane
+    global m_distPlane
+    msg=verbose
+    createFolders('WorkPlanes')
+    error_msg = "Unable to create Plane(s) : \nSelect at least one Plane !"
+    result_msg = " : Plane(s) created !"
+
+    Selection = get_SelectedObjectsWithParent(info=msg, printError=False)
+
+    try:
+        SelectedObjects = Selection
+        Number_of_Planes = SelectedObjects[2]
+            
+        if Number_of_Planes >= 1 :
+            Plane_List = SelectedObjects[5]
+            if msg !=0:
+                print_msg("Number_of_Planes = " + str(Number_of_Planes))
+                print_msg("Plane list = " + str(Plane_List))
+
+            for Selected_Plane_dict in Plane_List:
+                if msg != 0:
+                    print_msg("Selected_Plane_dict = " + str(Selected_Plane_dict))
+                for Selected_Plane, Parent_Plane in Selected_Plane_dict.iteritems():
+                    if msg != 0:
+                        print_msg("Selected_Plane = " + str(Selected_Plane))
+                        print_msg("Parent = " + str(Parent_Plane))     
+                    Plane_Point = Selected_Plane.CenterOfMass
+                    Plane_Normal = Selected_Plane.normalAt(0,0)
+                    if msg != 0:
+                        print_point(Plane_Point, msg="Plane_Point = ")
+                        print_point(Plane_Normal, msg="Plane_Normal = ")
+                    Placement1 = Selected_Plane.Placement
+                    base1 = Placement1.Base
+                    rot1 = Placement1.Rotation
+                    New_Point = Plane_Point + Plane_Normal.normalize().multiply(m_distPlane)                
+                    m_move = New_Point.sub(Plane_Point)
+                    if msg != 0:
+                        print_point(New_Point, msg="New_Point = ")
+                        print_point(m_move, msg="m_move = ")
+                        print_msg("m_numberPlane  = " + str(m_numberPlane))
+                        
+                    for m_i in range(m_numberPlane):
+                        if objCopy == 1:
+                            m_new_plane = App.activeDocument().copyObject(Parent_Plane)
+                        else:
+                            m_new_plane_shape = Selected_Plane.copy()
+                            m_new_plane = App.ActiveDocument.addObject("Part::Feature", "Plane_at_distance")
+                            m_new_plane.Shape = m_new_plane_shape
+                        App.ActiveDocument.getObject('WorkPlanes').addObject(m_new_plane)
+                        Plane_User_Name = m_new_plane.Label
+                        if msg != 0:
+                            print_msg("m_new_plane  = " + str(m_new_plane))
+                            print_msg("Plane_User_Name  = " + str(Plane_User_Name))
+                       
+                        newplace1 = App.Placement(base1.add(m_move), rot1 )
+                        m_new_plane.Placement = newplace1
+                        # Update the move
+                        m_move = m_move.add(New_Point.sub(Plane_Point))
+    
+                        properties_plane(Plane_User_Name)
+    
+                        print_msg(str(Plane_User_Name) + result_msg )              
+        else: 
+            printError_msg(error_msg)         
+    except:
+        printError_msg(error_msg)
+
+        
 def lengthPlane(value):
     """ Respond to the change in Plane length value from the text box.
     """        
@@ -4252,7 +4909,7 @@ def plot_faceTangentPlane():
     view = Gui.ActiveDocument.ActiveView
     m_callback = view.addEventCallback("SoMouseButtonEvent",getClickedTangent)
 
-    
+
 def plot_clickForPlane():
     """ Create a Plane at location of one mouse click in the view or 
     onto a clicked object or
@@ -4296,6 +4953,140 @@ def plot_clickForPlane():
         view = get_ActiveView()
         #m_callback = view.addEventCallbackPivy(SoMouseButtonEvent.getClassTypeId(),getClickedPlane)
         m_callback = view.addEventCallback("SoMouseButtonEvent",getClickedPlane2)
+
+
+def extensionPlane(value):
+    """ Respond to the change in Plane extension value from the text box.
+    """        
+    try:
+        # First we check if a valid number have been entered
+        global m_extensionPlane
+        m_extensionPlane  = float(value)
+        print_msg("New Plane extension is :" + str(m_extensionPlane))
+    except ValueError:
+        printError_msg("Plane extension must be valid number 5percentage)!")
+
+        
+def plot_extensionPlane():
+    """ Extend a Plane in each dimension, based on a percentage.
+    """
+    global verbose
+    msg=verbose
+    createFolders('WorkPlanes')
+    error_msg = "Unable to create Plane : \nSelect Plane(s) only !"
+    result_msg = " : Plane created !"
+    name = "Plane_extended"
+    part = "Part::Feature"
+    global m_extensionPlane
+    Selection = get_SelectedObjects(info=msg, printError=False)
+    try:
+        SelectedObjects = Selection
+        Number_of_Planes = SelectedObjects[2]
+        if msg !=0:
+            print_msg("Number_of_Planes=" + str(Number_of_Planes))
+        if (Number_of_Planes) >= 1 :
+            Plane_List = SelectedObjects[5]
+            if msg !=0:
+                print_msg("Plane_List=" + str(Plane_List))
+            for Selected_Plane in Plane_List:
+                if msg !=0:
+                    print_msg("Selected_Plane=" + str(Selected_Plane))
+                Plane_Normal = Selected_Plane.normalAt(0,0)
+                Plane_Point = Selected_Plane.CenterOfMass
+                max_val, min_val = init_min_max()
+                for edge in Selected_Plane.Edges:
+                    if msg !=0:
+                        print_msg("edge=" + str(edge))
+                        print_msg("edge.Length=" + str(edge.Length))
+                    min_val = min(min_val, edge.Length)
+                    max_val = max(max_val, edge.Length)
+                    if msg !=0:
+                        print_msg("min_val=" + str(min_val))
+                        print_msg("max_val=" + str(max_val))  
+                min_val = min_val * (1 + (m_extensionPlane/50))
+                max_val = max_val * (1 + (m_extensionPlane/50))   
+                Plane_User_Name, plane = plot_plane(min_val, max_val, Plane_Point, Plane_Normal, part, name)
+                print_msg(str(Plane_User_Name) + result_msg )
+    except:
+        printError_msg(error_msg) 
+
+
+def plot_clickForPlane2():
+    """ A circular plane is created facing the screen to mouse click coordinates 
+    on an object.
+    The radius of the plane is equal to the maximum dimension of BoundBox.
+    If no object is selected, the plane is created to 0, 0, 0 coordinates with 
+    a radius of 20 mm
+    """
+    global verbose
+    msg=verbose
+
+    m_actDoc = get_ActiveDocument(info=msg)
+    if m_actDoc == None:
+        return None
+    createFolders('WorkPlanes')
+        
+    printError_msg(error_msg)
+    return    
+    m_radius = 20
+    m_selEx = Gui.Selection.getSelectionEx(m_actDoc.Name)
+    m_objs = [selobj.Object for selobj in m_selEx]
+    if len(objs) >= 1:
+        s = m_objs[0].Shape
+        boundBox_ = s.BoundBox
+        boundBoxLX = boundBox_.XLength
+        boundBoxLY = boundBox_.YLength
+        boundBoxLZ = boundBox_.ZLength
+
+        m_radius = boundBoxLX
+        if m_radius < boundBoxLY:
+            m_radius = boundBoxLY
+        elif m_radius < boundBoxLZ:
+            m_radius = boundBoxLZ
+            
+    m_radiusP = m_radius
+    if msg !=0:
+        print_msg("Create plane ("+str(m_radiusP)+" mm)")
+    
+    # TODO to complete    
+    FcPlane = doc.addObject("App::DocumentObjectGroup","FcPlane")
+    plan = FreeCADGui.ActiveDocument.ActiveView.getCameraOrientation()
+    xP = float(datExtract(plan)[0])
+    yP = float(datExtract(plan)[1])
+    zP = float(datExtract(plan)[2])
+    qP = float(datExtract(plan)[3])
+    pl = FreeCAD.Placement()
+    pl.Rotation.Q = (xP,yP,zP,qP)         # rotation of object
+
+    pl.Base = FreeCAD.Vector(positionX,positionY,positionZ) # here coordinates XYZ of plan
+    points=[FreeCAD.Vector(-(radiusP*1.5),0,0),FreeCAD.Vector((radiusP*1.5),0,0)]
+    mire01 = Draft.makeWire(points,closed=False,placement=pl,face=False,support=None)
+    FreeCADGui.ActiveDocument.getObject(App.ActiveDocument.ActiveObject.Name).LineColor = (1.0,0.0,0.0)
+    FcPlane.addObject(mire01)  # contener character
+   
+    points=[FreeCAD.Vector(0,-(radiusP*1.5),0),FreeCAD.Vector(0,(radiusP*1.5),0)]
+    mire02 = Draft.makeWire(points,closed=False,placement=pl,face=False,support=None)
+    FreeCADGui.ActiveDocument.getObject(App.ActiveDocument.ActiveObject.Name).LineColor = (1.0,0.0,0.0)
+    FcPlane.addObject(mire02)  # contener character
+
+    cercle = Draft.makeCircle(radius=radiusP,placement=pl,face=False,support=None)
+    Rnameplane = App.ActiveDocument.ActiveObject.Name
+
+    App.ActiveDocument.ActiveObject.Label   = "PlaneC"
+    FreeCAD.ActiveDocument.getObject(Rnameplane).MakeFace = True
+    FreeCADGui.ActiveDocument.getObject(Rnameplane).LineColor = (1.0,0.0,0.0)
+    FreeCADGui.ActiveDocument.getObject(Rnameplane).ShapeColor = (0.0,0.66666669,1.0)
+    FreeCADGui.ActiveDocument.getObject(Rnameplane).Transparency = 80
+    FreeCADGui.ActiveDocument.getObject(Rnameplane).GridSize = '10 mm'
+#        FreeCADGui.ActiveDocument.getObject(Rnameplane).GridSnap = True
+    FreeCADGui.ActiveDocument.getObject(Rnameplane).ShowGrid = True
+
+    FcPlane.addObject(cercle)  # contener character
+    FreeCAD.ActiveDocument.recompute()
+
+    positionX = 0.0
+    positionY = 0.0
+    positionZ = 0.0
 
         
 def plot_centerObjectPlanes():
@@ -5791,6 +6582,11 @@ class WorkFeatureTab():
         self.ui = WFGui.Ui_Form()
         self.ui.setupUi(self.m_dialog)
         self.m_tab.setCurrentIndex(3)
+
+        # Create a Rotation object
+        self.rot = Rotation(self.ui)
+        # Create a Translation object
+        self.trans = Translation(self.ui)
                 
         ### Connect to functions
         self.connections_for_checkbox_toggled = {
@@ -5807,14 +6603,16 @@ class WorkFeatureTab():
                              "button_object_center"        : "plot_centerObjectPoint",
                              "button_Npoints_center"       : "plot_NpointsPoint",
                              "button_line_center"          : "plot_centerLinePoint",
-                             "button_line_extrema"         : "plot_extremaLinePoint",
-                             "button_point_on_line"        : "plot_alongLinePoint",
+                             "button_line_extrema"         : "plot_extremaLinePoint",                             
                              "button_circle_center"        : "plot_centerCirclePoint",
+                             "button_point_on_line"        : "plot_alongLinePoint",                             
                              "button_face_center"          : "plot_centerFacePoint",
                              "button_line_face_point"      : "plot_lineFacePoint",
-                             "button_point_line_point"     : "plot_pointLinePoint",
                              "button_point_face_point"     : "plot_pointFacePoint",
+                             
                              "button_twolines_point"       : "plot_2LinesPoint",
+                             "button_point_line_point"     : "plot_pointLinePoint",
+                             "button_distPoint"            : "plot_distPoint",                             
                              "button_cut_wire_point"       : "plot_cutWirePoint",
                              "button_click_for_point"      : "plot_clickForPoint",
                              "button_object_base_point"    : "plot_baseObjectPoint",
@@ -5825,14 +6623,17 @@ class WorkFeatureTab():
                              "button_cylinder_axis"        : "plot_cylinderAxis",
                              "button_plane_axis"           : "plot_planeAxis",
                              "button_face_normal"          : "plot_faceNormal",                            
-                             "button_twolines_axis"        : "plot_2LinesAxis",
-                             "button_cut_axis"             : "plot_cutAxis",
-                             "button_cut_wire_axis"        : "plot_cutWireAxis",
                              "button_point_line_axis"      : "plot_pointLineAxis",
                              "button_line_point_axis"      : "plot_linePointAxis",
-                             "button_line_plane_axis"      : "plot_linePlaneAxis",
+                             "button_twolines_axis"        : "plot_2LinesAxis",
                              "button_plane_point_line_axis": "plot_planeLinePointAxis",
+                             "button_line_plane_axis"      : "plot_linePlaneAxis",
                              "button_twoplanes_axis"       : "plot_2PlanesAxis",
+                             
+                             "button_distLine"             : "plot_distLine",
+                             "button_cut_axis"             : "plot_cutAxis",
+                             "button_cut_wire_axis"        : "plot_cutWireAxis",
+                             "button_extension_axis"       : "plot_extensionAxis",
                              "button_click_for_axis"       : "plot_clickForAxis",                             
                              "button_object_base_axes"     : "plot_baseObjectAxes",
                              "button_line_to_sketch"       : "line_toSketch",
@@ -5848,8 +6649,11 @@ class WorkFeatureTab():
                              "button_axis_point_plane"     : "plot_perpendicularAxisPointPlane",
                              "button_planeandpoint_plane"  : "plot_planePointPlane",                             
                              "button_planeandaxis_plane"   : "plot_planeAxisPlane",
+                             "button_distPlane"            : "plot_distPlane",
                              "button_face_tangent"         : "plot_faceTangentPlane",
                              "button_click_for_plane"      : "plot_clickForPlane",
+                             
+                             "button_extension_plane"      : "plot_extensionPlane",
                              "button_object_center_planes" : "plot_centerObjectPlanes",
                              
                              "button_boundingboxes"        : "plot_boundingBoxes",
@@ -5897,6 +6701,11 @@ class WorkFeatureTab():
                              "width_plane"               : "widthPlane",
                              "length_plane_2"            : "lengthPlane",
                              "width_plane_2"             : "widthPlane",
+                             "extension_plane"           : "extensionPlane",
+                             "extension_axis"            : "extensionAxis",
+                             "dist_plane"                : "distPlane",
+                             "dist_line"                 : "distLine",
+                             "dist_point"                : "distPoint",
                              
                             }
                             
@@ -5906,11 +6715,15 @@ class WorkFeatureTab():
                              "spin_wire_cut_point"       : "numberPointCutWire",
                              "spin_wire_cut_axis"        : "numberAxisCutWire",
                              "spin_circle_cut"           : "numberCircleCut",
+                             "spin_dist_plane"           : "numberPlane",
+                             "spin_dist_line"            : "numberLine",
+                             "spin_dist_point"           : "numberPoint",
                             }
                             
         self.connections_for_radiobutton_clicked = {                     
                              "radioButton_verbose"       : "verbose_toggled",
                              "radioButton_biColor"       : "biColor_toggled",
+                             "radioButton_copy"          : "copy_toggled",
                             }
                             
         self.connections_for_combobox_changed = {
@@ -5958,8 +6771,106 @@ class WorkFeatureTab():
             #print_msg( "Connecting : " + str(m_key) + " and " + str(m_val) )                            
             QtCore.QObject.connect(getattr(self.ui, str(m_key)),
                                    QtCore.SIGNAL(_fromUtf8("currentIndexChanged(QString)")),globals()[str(m_val)])                      
+
+#==============================================================================
+# Define Connections to Translation Object
+#==============================================================================
+        self.connections_for_ObjTrans_button_pressed = {                        
+                             "ObjTrans_button_select"         : "initialize",
+                             "ObjTrans_button_select_start"   : "select_start",
+                             "ObjTrans_button_select_end"     : "select_end",
+                             "ObjTrans_button_reset"          : "reset",
+                             "ObjTrans_button_apply"          : "application",
+                             }
+                             
+        self.connections_for_ObjTrans_combobox_changed = {
+                             "ObjTrans_comboBox_start"        : "start_value",
+                             "ObjTrans_comboBox_end"          : "end_value",
+                            }
  
-                                   
+        self.connections_for_ObjTrans_checkbox_toggled = { 
+                            "ObjTrans_duplicate"              : "copyFlag",
+                            }
+                
+        self.connections_for_ObjTrans_spin_changed = {
+                             "ObjTrans_spin"                  : "numberCopies",
+                            }
+#==============================================================================
+# Connect to Translation functions
+#==============================================================================
+        for m_key, m_val in self.connections_for_ObjTrans_button_pressed.items():
+            #func.print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.trans, str(m_val))) )
+            QtCore.QObject.connect(getattr(self.ui, str(m_key)),
+                                   QtCore.SIGNAL("pressed()"),getattr(self.trans, str(m_val)))
+                                        
+        for m_key, m_val in self.connections_for_ObjTrans_combobox_changed.items():
+            #print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.trans, str(m_val))) )                            
+            QtCore.QObject.connect(getattr(self.ui, str(m_key)),
+                                   QtCore.SIGNAL(_fromUtf8("currentIndexChanged(QString)")),getattr(self.trans, str(m_val)))     
+
+        for m_key, m_val in self.connections_for_ObjTrans_checkbox_toggled.items():
+            #print_msg( "Connecting : " + str(m_key) + " and " + str(m_val) )
+            #print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.trans, str(m_val))) ) 
+            QtCore.QObject.connect(getattr(self.ui, str(m_key)),
+                                   QtCore.SIGNAL(_fromUtf8("toggled(bool)")),getattr(self.trans, str(m_val)))  
+              
+
+        for m_key, m_val in self.connections_for_ObjTrans_spin_changed.items():
+            #print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.trans, str(m_val))) ) 
+            QtCore.QObject.connect(getattr(self.ui, str(m_key)),
+                                   QtCore.SIGNAL("valueChanged(int)"),getattr(self.trans, str(m_val))) 
+
+#==============================================================================
+# Define Connections to Rotation Object
+#==============================================================================
+        self.connections_for_ObjRot_slider_changed = {                    
+                             "ObjRot_horizontalSlider"      : "angle_value_changed",
+                             }
+                             
+        self.connections_for_ObjRot_button_pressed = { 
+                             "ObjRot_button_select"         : "initialize",
+                             "ObjRot_button_select_center"  : "select_center",
+                             "ObjRot_button_select_axis"    : "select_axis",
+                             "ObjRot_button_reset"          : "reset",
+                             "ObjRot_button_apply"          : "application",
+                             }
+                             
+        self.connections_for_ObjRot_combobox_changed = {
+                             "ObjRot_comboBox_center"       : "center_value",
+                             "ObjRot_comboBox_axis"         : "axis_value",
+                            }
+                              
+        self.connections_for_ObjRot_return_pressed = { 
+                             "ObjRot_lineEdit_angle"        : "angle_value_entered",
+                             }
+
+#==============================================================================
+# Connect to Rotation functions
+#==============================================================================
+        for m_key, m_val in self.connections_for_ObjRot_button_pressed.items():
+            #func.print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.rot, str(m_val))) )
+            QtCore.QObject.connect(getattr(self.ui, str(m_key)),
+                                   QtCore.SIGNAL("pressed()"),getattr(self.rot, str(m_val)))                   
+                                           
+        for m_key, m_val in self.connections_for_ObjRot_combobox_changed.items():
+            #print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.rot, str(m_val))) )                            
+            QtCore.QObject.connect(getattr(self.ui, str(m_key)),
+                                   QtCore.SIGNAL(_fromUtf8("currentIndexChanged(QString)")),getattr(self.rot, str(m_val)))     
+        
+        for m_key, m_val in self.connections_for_ObjRot_slider_changed.items():
+            #func.print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.rot, str(m_val))) )
+            QtCore.QObject.connect(getattr(self.ui, str(m_key)),
+                                   QtCore.SIGNAL("valueChanged(int)"),getattr(self.rot, str(m_val)))        
+        
+        for m_key, m_val in self.connections_for_ObjRot_return_pressed.items():
+            #func.print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.rot, str(m_val))) )
+            QtCore.QObject.connect(getattr(self.ui, str(m_key)),
+                                   QtCore.SIGNAL("returnPressed()"),getattr(self.rot, str(m_val)))
+
+
+
+
+                                                
         self.m_dialog.show()
         m_text=str(myRelease)
         self.ui.label_release.setText(QtGui.QApplication.translate("Form", m_text, None, QtGui.QApplication.UnicodeUTF8))
