@@ -5,8 +5,7 @@ import sys
 if not sys.path.__contains__("/usr/lib/freecad/lib"): 
     sys.path.append("/usr/lib/freecad/lib") 
     
-import ObjRotGui_2015 as ObjRotGui
-import MY_Functions  as func
+import __init__  as func
 global myRelease
 myRelease = "2105_02"
 
@@ -293,7 +292,7 @@ class Translation():
                 return
             self.m_num_cpy  = int(value)
         except ValueError:
-           func. printError_msg("Number must be valid !")
+           func.printError_msg("Number must be valid !")
            
         if self.msg != 0:
             func.print_msg("New copy number is :" + str(self.m_num_cpy))   
