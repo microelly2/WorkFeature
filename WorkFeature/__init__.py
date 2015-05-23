@@ -52,10 +52,11 @@ if not sys.path.__contains__("/usr/lib/freecad/lib"):
 import WFGui_2015 as WFGui
 from   WF_ObjRot_2015 import *
 global myRelease
-myRelease = "2105_03_31"
+myRelease = "2015_05_23"
 
 import os.path
 import math
+import itertools
     
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -71,7 +72,7 @@ from PySide import QtCore, QtGui
 # assume the Icons directory in the same directory as this MACRO file
 ICONS_PATH = os.path.dirname(__file__) + "/Icons"
 # use "icons" as prefix which we used in the .ui file  
-QtCore.QDir.setSearchPaths("icons", [ICONS_PATH]) 
+QtCore.QDir.addSearchPath("icons", ICONS_PATH) 
 
 # LineColor
 red   = 1.0  # 1 = 255
