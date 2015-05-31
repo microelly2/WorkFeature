@@ -49,7 +49,7 @@ def print_methods(obj, doc=False):
                 print names
                 
 
-def plot_point(Vector_point, part= "Part::Feature", name= "CenterObjects", grp="Rot_Trans"):
+def plot_point(Vector_point, part="Part::Feature", name="CenterObjects", grp="Rot_Trans"):
     if not(App.ActiveDocument.getObject( grp )):
         App.ActiveDocument.addObject("App::DocumentObjectGroup", grp)
     point = App.ActiveDocument.addObject( part, name )
@@ -216,6 +216,8 @@ class Translation():
         self.gui        = gui
         self.start      = self.origin
         self.end        = []
+        self.end_relative = False
+        self.relative   = App.Vector(0,0,0)
         self.m_num_end  = 0
         self.end.append(self.origin)
         self.but_select = self.gui.ObjTrans_button_select
@@ -235,6 +237,7 @@ class Translation():
         self.end_z      = self.gui.ObjTrans_end_z
         self.dupli      = self.gui.ObjTrans_duplicate
         self.dup_num    = self.gui.ObjTrans_spin
+        self.dup_deep   = self.gui.ObjTrans_deepCopy
 
 
         self.valid_start = {  "Origin" : "origin",
@@ -242,18 +245,23 @@ class Translation():
                               "Center Obj.(s)" : "center",
                               "To select" : "select",
                               "To define" : "define",
+                              "Relative"  : "relative",
                             }
         
         self.visuObjects = []
         
         self.duplicate = False
+        self.deep = False
         self.m_num_cpy = 1
-        self.dup_num.setValue(self.m_num_cpy)
-        self.dup_num.setEnabled(self.duplicate)
-        self.dupli.setCheckState(QtCore.Qt.Unchecked)
+        self.dup_num.setValue(1)
+        self.dup_num.setEnabled(False)
+        #self.dupli.setCheckState(QtCore.Qt.Unchecked)
+        self.dupli.setChecked(False)
+        self.dup_deep.setEnabled(False)
+        self.dup_deep.setChecked(False)
         
         self.enable(False)
-
+               
                 
     def enable(self, flag=True):
         """ Enable or not most of the buttons.
@@ -300,7 +308,14 @@ class Translation():
         if self.m_num_obj >= 1 and self.m_num_cpy >= 1:
             self.reset()
             self.preview()
- 
+
+    def  deepCopyFlag(self, flag):
+        """ Respond to the change of deep copy flag.
+        """
+        if self.msg != 0:
+            func.print_msg("deepCopyFlag !")
+        self.deep = flag
+        
        
     def copyFlag(self, flag):
         """ Respond to the change of duplicate flag.
@@ -310,8 +325,11 @@ class Translation():
         if flag == False:
             self.m_num_cpy = 1
             self.dup_num.setValue(self.m_num_cpy)
+            self.dup_deep.setChecked(False)
         self.duplicate = flag
         self.dup_num.setEnabled(self.duplicate)
+        self.dup_deep.setEnabled(self.duplicate)
+         
 
         if self.m_num_obj >= 1 and self.m_num_cpy >= 1:
             self.reset()
@@ -331,7 +349,7 @@ class Translation():
         """ Clean the list of Duplicated objects.
         """
         if self.msg != 0:
-            func.print_msg("cleanDuplication !")
+            func.print_msg("cleanDuplication :")
             
         for m_objdup in self.m_objs_dup:
             if self.msg != 0:
@@ -345,30 +363,38 @@ class Translation():
         """ Reset the list of Duplicated objects.
         """
         if self.msg != 0:
-            func.print_msg("resetDuplication !")
+            func.print_msg("resetDuplication :")
         
         self.cleanDuplication()
         
         self.duplicate = False
+        self.deep = False
         self.m_num_cpy = 1
-        self.dup_num.setValue(self.m_num_cpy)
-        self.dup_num.setEnabled(self.duplicate)
-        self.dupli.setCheckState(QtCore.Qt.Unchecked)
+        self.dup_num.setValue(1)
+        self.dup_num.setEnabled(False)
+        self.dupli.setChecked(False)
+        self.dup_deep.setEnabled(False)
+        self.dup_deep.setChecked(False)
 
            
     def initialize(self):
-        """ Store a copy of original placements for all selected objects
+        """ Activated by a click on ObjTrans_button_select
+        Store a copy of original placements for all selected objects
         into internal placement lists.
         """
         if self.msg != 0:
             func.print_msg("initialize !")
             
-        if not(App.ActiveDocument.getObject("Rot_Trans")):   
-            try:
-                App.ActiveDocument.addObject("App::DocumentObjectGroup","Rot_Trans")    
-            except:
-                printError_msg("Could not Create 'Rot_Trans' Objects Group!")
-                    
+        func.createFolders("Rot_Trans")
+            
+#==============================================================================
+#         if not(App.ActiveDocument.getObject("Rot_Trans")):   
+#             try:
+#                 App.ActiveDocument.addObject("App::DocumentObjectGroup","Rot_Trans")    
+#             except:
+#                 printError_msg("Could not Create 'Rot_Trans' Objects Group!")
+#==============================================================================
+                                   
         # Mimic behavior of toggle button
         # Here we have at least an existing object selected and we clean and unselect
         if self.m_num_obj >= 1:
@@ -380,11 +406,13 @@ class Translation():
             self.but_select.setText(QtGui.QApplication.translate("Form", button_text, None, QtGui.QApplication.UnicodeUTF8))
             self.enable(False)
             self.resetDuplication()
+            self.reset_start_value()
+            self.reset_end_value()
             for m_i in range(len(self.names)):
                 Gui.ActiveDocument.getObject( self.names[m_i]).Transparency = self.transparency[m_i]
             self.removeVisu()
             del self.names[:]
-            del self.end[:] 
+            del self.end[:]            
             return
         
         # Here is the normal entrance after objects selection
@@ -421,7 +449,7 @@ class Translation():
         self.enable(True)   
         self.but_select.setText(QtGui.QApplication.translate("Form", button_text, None, QtGui.QApplication.UnicodeUTF8))
         
-        # get placement and transparency for all objects             
+        # Get placement and transparency for all objects             
         # Placement [Pos=(0,0,0), Yaw-Pitch-Roll=(0,0,0)]
         for m_i in range(self.m_num_obj):            
             self.placement0.append(App.Placement(self.m_objs[m_i].Placement))
@@ -459,10 +487,10 @@ class Translation():
 
 
     def removeVisu(self):
-        """ Remove the visualization object.
+        """ Remove all the visualization objects.
         """ 
         if self.msg != 0:
-            func.print_msg("removeVisu !")
+            func.print_msg("removeVisu :")
             
         for i in range(len(self.visuObjects)):
             App.getDocument(str(App.activeDocument().Name)).removeObject(self.visuObjects[i])        
@@ -473,7 +501,7 @@ class Translation():
         """ Set the visualization objects.
         """
         if self.msg != 0:
-            func.print_msg("Visu !") 
+            func.print_msg("visu :") 
         
         m_start  = self.start        
         m_base   = self.base
@@ -481,23 +509,23 @@ class Translation():
                
         self.removeVisu() 
         if m_start != None:
-            point_User_Name, point = plot_point(m_start, name= "Start", grp="Rot_Trans")
+            point_User_Name, point = plot_point(m_start, name="Trans_Start", grp="Rot_Trans")
             Gui.ActiveDocument.getObject( point_User_Name ).PointColor = (0.0,0.0,1.0)
             Gui.ActiveDocument.getObject( point_User_Name ).PointSize = 10.00
             self.visuObjects.append(point_User_Name)
         if m_base != None:   
-            point_User_Name, point = plot_point(m_base, name= "Base", grp="Rot_Trans")
+            point_User_Name, point = plot_point(m_base, name="Trans_Base", grp="Rot_Trans")
             Gui.ActiveDocument.getObject( point_User_Name ).PointColor = (1.0,0.0,0.0)
             Gui.ActiveDocument.getObject( point_User_Name ).PointSize = 3.00
             self.visuObjects.append(point_User_Name)
         if m_center != None:   
-            point_User_Name, point = plot_point(m_center, name= "Base", grp="Rot_Trans")
+            point_User_Name, point = plot_point(m_center, name="Trans_Center", grp="Rot_Trans")
             Gui.ActiveDocument.getObject( point_User_Name ).PointColor = (0.0,1.0,0.0)
             Gui.ActiveDocument.getObject( point_User_Name ).PointSize = 3.00
             self.visuObjects.append(point_User_Name)
         if self.m_num_end != 0:
             for m_i_end in range(self.m_num_end): 
-                point_User_Name, point = plot_point(self.end[m_i_end], name= "End", grp="Rot_Trans")
+                point_User_Name, point = plot_point(self.end[m_i_end], name="Trans_End", grp="Rot_Trans")
                 Gui.ActiveDocument.getObject( point_User_Name ).PointColor = (1.0,1.0,1.0)
                 Gui.ActiveDocument.getObject( point_User_Name ).PointSize = 10.00
                 self.visuObjects.append(point_User_Name)
@@ -510,12 +538,66 @@ class Translation():
         func.print_msg("translation start = " + str(self.start))
         func.print_msg("translation end   = " + str(self.end))
 
+
+    def start_x_entered(self):
+        if self.msg != 0:
+            func.print_msg("start_x_entered :")       
+        try:
+            # First we check if a valid number have been entered
+            self.start.x = float(self.start_x.text())
+                     
+            # Update the view
+            self.print_start(self.start)
+            self.visu()
+            self.preview()
+        except ValueError:
+            func.printError_msg("X must be valid number !")  
+    
+
+    def start_y_entered(self):
+        if self.msg != 0:
+            func.print_msg("start_y_entered :")       
+        try:
+            # First we check if a valid number have been entered
+            self.start.y = float(self.start_y.text())
+                     
+            # Update the view
+            self.print_start(self.start)
+            self.visu()
+            self.preview()
+        except ValueError:
+            func.printError_msg("Y must be valid number !")         
+        
+
+    def start_z_entered(self):
+        if self.msg != 0:
+            func.print_msg("start_z_entered :")       
+        try:
+            # First we check if a valid number have been entered
+            self.start.z = float(self.start_z.text())
+                     
+            # Update the view
+            self.print_start(self.start)
+            self.visu()
+            self.preview()
+        except ValueError:
+            func.printError_msg("Z must be valid number !")
+
+            
+    def print_start(self, point):
+        if self.msg != 0:
+            func.print_msg("print_start :")
+            
+        self.start_x.setText(str(point.x))
+        self.start_y.setText(str(point.y))
+        self.start_z.setText(str(point.z))
+    
         
     def select_start(self):
         """ Selection of Start point of translation by button.
         """
         if self.msg != 0:
-            func.print_msg("Selection of Start point of translation by button !")  
+            func.print_msg("select_start : Selection of Start point of translation by button !")  
         
         error_msg = "Select one point !"
         
@@ -533,21 +615,33 @@ class Translation():
             self.start = Point_List[0].Point
             button_text = "Selected !"
             self.but_start.setText(QtGui.QApplication.translate("Form", button_text, None, QtGui.QApplication.UnicodeUTF8))        
+            self.print_start(self.start)
             self.visu()
+            self.preview()
 
-             
-    def start_value(self, *argc):
+
+    def reset_start_value(self):
+        """ Reset the combo box for start button.
+        """ 
+        if self.msg != 0:
+            func.print_msg("reset_start_value :")
+        # DeActivate select button 
+        self.but_start.setEnabled(False) 
+        button_text = "Select"
+        self.but_start.setText(QtGui.QApplication.translate("Form", button_text, None, QtGui.QApplication.UnicodeUTF8))
+        # DeActivate Start Input
+        self.setEnabledStartInput(False)
+        self.print_start(self.origin)
+ 
+
+    def select_start_type(self, *argc):
         """ Start point of translation by combo box.
         """
         if self.msg != 0:
-            func.print_msg("Start point of translation by combo box !") 
+            func.print_msg("select_start_type : Start point of translation by combo box !") 
             
-        # DeActivate select button 
-        self.but_start.setEnabled(False)
-        button_text = "Select"
-        self.but_start.setText(QtGui.QApplication.translate("Form", button_text, None, QtGui.QApplication.UnicodeUTF8))
-        
-        self.setEnabledStartInput(False)        
+        self.reset_start_value()
+               
         if str(*argc) == "To select":
             # Activate select button and wait for selection
             self.but_start.setEnabled(True)
@@ -555,49 +649,97 @@ class Translation():
         elif str(*argc) == "To define":
             # Activate define input boxes and wait for entering values
             self.setEnabledStartInput(True)
-            self.start = None
+            self.start = App.Vector(0,0,0)
         else:
             button_text = "Select"
             self.but_start.setText(QtGui.QApplication.translate("Form", button_text, None, QtGui.QApplication.UnicodeUTF8))
             self.but_start.setEnabled(False)
             self.start = getattr(self, str(self.valid_start[str(*argc)]))
+            self.print_start(self.start)
             
         self.visu()
-   
-    def end_value(self, *argc):
-        """ End point of translation by combo box.
-        """
+        
+
+    def end_x_entered(self):
         if self.msg != 0:
-            func.print_msg("End point of translation by combo box !")
+            func.print_msg("end_x_entered :")       
+        try:
+            # First we check if a valid number have been entered
+            self.relative.x = float(self.end_x.text())
+            if self.end_relative and  self.start != None:
+                self.end[0].x = self.start.x + self.relative.x
+                self.end[0].y = self.start.y + self.relative.y
+                self.end[0].z = self.start.z + self.relative.z   
+            else:
+                self.end[0].x = self.relative.x 
+            self.m_num_end = 1         
+            # Update the view
+            self.print_end(self.relative)
+            self.visu()
+            self.preview()
+        except ValueError:
+            self.m_num_end = 0 
+            func.printError_msg("X must be valid number !")  
+    
+
+    def end_y_entered(self):
+        if self.msg != 0:
+            func.print_msg("end_y_entered :")       
+        try:
+            # First we check if a valid number have been entered
+            self.relative.y = float(self.end_y.text())
+            if self.end_relative and  self.start != None:
+                self.end[0].x = self.start.x + self.relative.x
+                self.end[0].y = self.start.y + self.relative.y
+                self.end[0].z = self.start.z + self.relative.z                
+            else:
+                self.end[0].y = self.relative.y
+            self.m_num_end = 1          
+            # Update the view 
+            self.print_end(self.relative)
+            self.visu()
+            self.preview()
+        except ValueError:
+            self.m_num_end = 0
+            func.printError_msg("Y must be valid number !")         
         
-        # DeActivate select button 
-        self.but_end.setEnabled(False)
-        button_text = "Select"
-        self.but_end.setText(QtGui.QApplication.translate("Form", button_text, None, QtGui.QApplication.UnicodeUTF8))             
-        
-        self.setEnabledEndInput(False)
-        del self.end[:]
-        self.m_num_end = 0  
-        if str(*argc) == "To select":
-            # Activate select button and wait for selection
-            self.but_end.setEnabled(True)
-        elif str(*argc) == "To define":
-            # Activate define input boxes and wait for entering values
-            self.setEnabledEndInput(True)
-        else:
-            button_text = "Select"
-            self.but_end.setText(QtGui.QApplication.translate("Form", button_text, None, QtGui.QApplication.UnicodeUTF8))
-            self.but_end.setEnabled(False)
-            self.end.append(getattr(self, str(self.valid_start[str(*argc)])))
-            self.m_num_end = 1
+
+    def end_z_entered(self):
+        if self.msg != 0:
+            func.print_msg("end_z_entered :")       
+        try:
+            # First we check if a valid number have been entered
+            self.relative.z = float(self.end_z.text())
+            if self.end_relative and  self.start != None:
+                self.end[0].x = self.start.x + self.relative.x
+                self.end[0].y = self.start.y + self.relative.y
+                self.end[0].z = self.start.z + self.relative.z
+            else:
+                self.end[0].z = self.relative.z
+            self.m_num_end = 1          
+            # Update the view
+            self.print_end(self.relative)
+            self.visu()
+            self.preview()
+        except ValueError:
+            self.m_num_end = 0
+            func.printError_msg("Z must be valid number !")
+
+
+    def print_end(self, point):
+        if self.msg != 0:
+            func.print_msg("print_end :")
             
-        self.visu()
-        
+        self.end_x.setText(str(point.x))
+        self.end_y.setText(str(point.y))
+        self.end_z.setText(str(point.z))
+
+       
     def select_end(self):
         """ Selection of End point(s) of translation by button.
         """
         if self.msg != 0:
-            func.print_msg("Selection of End point(s) of translation by button !")
+            func.print_msg("select_end : Selection of End point(s) of translation by button !")
             
         error_msg = "Select at least one point !"
         
@@ -620,11 +762,62 @@ class Translation():
                 button_text = "Selected !"
             else:
                 button_text = "Multi Sel !"
-            self.but_end.setText(QtGui.QApplication.translate("Form", button_text, None, QtGui.QApplication.UnicodeUTF8))
+            self.but_end.setText(QtGui.QApplication.translate("Form", button_text, None, QtGui.QApplication.UnicodeUTF8))            
+            self.print_end(self.end[0])
             self.visu()
-            self.preview()
+            self.preview()     
 
-    
+        
+    def reset_end_value(self):
+        """ Reset the combo box for end button.
+        """
+        if self.msg != 0:
+            func.print_msg("reset_end_value :")
+            
+        # DeActivate select button 
+        self.but_end.setEnabled(False)
+        button_text = "Select"
+        self.but_end.setText(QtGui.QApplication.translate("Form", button_text, None, QtGui.QApplication.UnicodeUTF8))             
+        # DeActivate End Input
+        self.setEnabledEndInput(False)
+        self.print_end(self.origin)
+               
+   
+    def select_end_type(self, *argc):
+        """ End point of translation by combo box.
+        """
+        if self.msg != 0:
+            func.print_msg("select_end_type : End point of translation by combo box !")
+        
+        self.reset_end_value()
+                
+        del self.end[:]
+        self.m_num_end = 0  
+        if str(*argc) == "To select":
+            # Activate select button and wait for selection
+            self.but_end.setEnabled(True)
+        elif str(*argc) == "To define":
+            # Activate define input boxes and wait for entering values
+            self.setEnabledEndInput(True)
+            self.end_relative = False
+            self.end.append(App.Vector(0,0,0))
+        elif str(*argc) == "Relative":
+            # Activate define input boxes and wait for entering values
+            self.setEnabledEndInput(True)
+            self.end_relative = True
+            self.end.append(App.Vector(0,0,0))
+        else:
+            button_text = "Select"
+            self.but_end.setText(QtGui.QApplication.translate("Form", button_text, None, QtGui.QApplication.UnicodeUTF8))
+            self.but_end.setEnabled(False)
+            self.end.append(getattr(self, str(self.valid_start[str(*argc)])))
+            self.print_end(self.end[0])
+            self.m_num_end = 1
+            self.preview()
+            
+        self.visu()
+        
+            
     def preview(self):
         """ Preview the placement.
         """
@@ -641,9 +834,7 @@ class Translation():
                 if self.msg != 0:
                     func.print_msg("Preview the placement of " + str(self.m_num_obj) + " objects !") 
                 # loop on the selected objects
-                for m_i_obj in range(self.m_num_obj):
-                    
-
+                for m_i_obj in range(self.m_num_obj):                    
                     base1 = self.placement1[m_i_obj].Base
                     rot1 = self.placement1[m_i_obj].Rotation
                     # For all the end points
@@ -656,10 +847,11 @@ class Translation():
                             if self.duplicate:
                                 for m_copy in range(self.m_num_cpy):
                                     # Let's duplicate the Object
-                                    m_obj2 = App.activeDocument().copyObject(self.m_objs[m_i_obj])
+                                    m_obj2 = App.activeDocument().copyObject(self.m_objs[m_i_obj],self.deep)
                                     self.m_objs_dup.append(m_obj2)
-                                    self.m_transp_dup.append(self.transparency[m_i_obj])
+                                    self.m_transp_dup.append(self.transparency[m_i_obj])                                    
                                     App.ActiveDocument.getObject("Rot_Trans").addObject(m_obj2)
+                                        
                                     newplace1 = App.Placement(base1.add(m_move), rot1 )
                                     m_obj2.Placement = newplace1
                                     # Update the move
@@ -670,16 +862,20 @@ class Translation():
                                 
                         else:
                             # At least a second end point exists so duplication
-                            m_obj3 = App.activeDocument().copyObject(self.m_objs[m_i_obj])
+                            m_obj3 = App.activeDocument().copyObject(self.m_objs[m_i_obj],self.deep)
                             self.m_objs_dup.append(m_obj3)
-                            self.m_transp_dup.append(self.transparency[m_i_obj])
+                            self.m_transp_dup.append(self.transparency[m_i_obj])                            
+                            App.ActiveDocument.getObject("Rot_Trans").addObject(m_obj3)
+                            
+                            
                             if self.duplicate:
                                 for m_copy in range(self.m_num_cpy):
                                     # Let's duplicate the Object
-                                    m_obj4 = App.activeDocument().copyObject(m_obj3)
+                                    m_obj4 = App.activeDocument().copyObject(m_obj3,self.deep)
                                     self.m_objs_dup.append(m_obj4)
-                                    self.m_transp_dup.append(self.transparency[m_i_obj])
+                                    self.m_transp_dup.append(self.transparency[m_i_obj])                                    
                                     App.ActiveDocument.getObject("Rot_Trans").addObject(m_obj4)
+                                    
                                     newplace1 = App.Placement(base1.add(m_move), rot1 )
                                     m_obj4.Placement = newplace1
                                     # Update the move
@@ -724,7 +920,7 @@ class Translation():
         """ Reset to original placement.
         """
         if self.msg != 0:
-            func.print_msg("Reset button pressed !")
+            func.print_msg("reset :")
             
         if self.selection() == False:
             if self.msg != 0:
@@ -738,15 +934,13 @@ class Translation():
             self.m_objs[m_i_obj].Placement     = self.placement0[m_i_obj]
         
         self.cleanDuplication()
+        self.reset_start_value()
+        self.comb_end.setCurrentIndex(3)
+        self.but_start.setEnabled(True)
+        self.reset_end_value()
+        self.comb_start.setCurrentIndex(3)
+        self.but_end.setEnabled(True)
 
-#==============================================================================
-#         self.duplicate = False
-#         self.m_num_cpy = 1
-#         self.dup_num.setValue(self.m_num_cpy)
-#         self.dup_num.setEnabled(self.duplicate)
-#         self.dupli.setCheckState(QtCore.Qt.Unchecked)
-#         self.end_value("To select") 
-#==============================================================================
 
             
 class Rotation():
@@ -823,7 +1017,9 @@ class Rotation():
         """
         if self.msg != 0:
             func.print_msg("initialize !")
-            
+        
+        func.createFolders("Rot_Trans")
+        
         if not(App.ActiveDocument.getObject("Rot_Trans")):   
             try:
                 App.ActiveDocument.addObject("App::DocumentObjectGroup","Rot_Trans")    
@@ -1001,6 +1197,68 @@ class Rotation():
         if self.msg != 0:
             self.info()
 
+
+    def select_angle(self):
+   
+        error_msg =\
+        "INCORRECT Object(s) Selection :\n" +\
+        "You Must Select Two(2) Edges !\n"+\
+        "Or Two(2) Planes !\n"+\
+        "Or One Edge and One Plane !"
+        
+        m_angle, m_angle_rad = 0.0, 0.0
+    
+        Selection = func.get_SelectedObjects(info=self.msg, printError=False)
+        
+        try:
+            SelectedObjects = Selection
+            Number_of_Edges  = SelectedObjects[1]
+            Number_of_Planes = SelectedObjects[2]
+            if self.msg!=0:
+                func.print_msg("Number_of_Edges=" + str(Number_of_Edges))
+                func.print_msg("Number_of_Planes=" + str(Number_of_Planes))
+    
+            if Number_of_Edges == 2:
+                Edge_List = SelectedObjects[4]    
+                if self.msg != 0:
+                    func.print_msg(" Edge_List=" + str(Edge_List))
+                m_angle, m_angle_rad = func.angleBetween(Edge_List[0],Edge_List[1])
+
+                
+            elif Number_of_Planes == 2 :
+                Plane_List = SelectedObjects[5]
+                if self.msg != 0:
+                    func.print_msg(" Plane_List=" + str(Plane_List))
+                    
+                Normal1 = Plane_List[0].normalAt(0,0)
+                Normal2 = Plane_List[1].normalAt(0,0)
+                if self.msg != 0:
+                    print_point(Normal1, msg="Normal1 : ")
+                    print_point(Normal2, msg="Normal2 : ")
+                            
+                m_angle, m_angle_rad = func.angleBetween(Normal1,Normal2)
+
+                
+            elif Number_of_Planes == 1 and Number_of_Edges == 1:
+                Edge_List  = SelectedObjects[4] 
+                Plane_List = SelectedObjects[5]
+                if self.msg != 0:
+                    func.print_msg(" Edge_List =" + str(Edge_List))
+                    func.print_msg(" Plane_List=" + str(Plane_List))
+                    
+                Normal1 = Plane_List[0].normalAt(0,0)
+                            
+                m_angle, m_angle_rad = func.angleBetween(Edge_List[0],Normal1)
+
+            else:
+                func.printError_msg(error_msg)
+            
+            self.angle_edit.setText(str(m_angle))
+            self.angle_value_entered()
+
+        except:
+            func.printError_msg(error_msg)
+        
         
     def set_zero(self):
         """ Put zero into edit box and on slider.
@@ -1197,8 +1455,8 @@ class ObjectRotationTab():
                              } 
                                    
         self.connections_for_ObjTrans_combobox_changed = {
-                             "ObjTrans_comboBox_start"        : "start_value",
-                             "ObjTrans_comboBox_end"          : "end_value",
+                             "ObjTrans_comboBox_start"        : "select_start_type",
+                             "ObjTrans_comboBox_end"          : "select_end_type",
                             }
                             
         self.connections_for_ObjTrans_checkbox_toggled = { 
@@ -1208,6 +1466,15 @@ class ObjectRotationTab():
         self.connections_for_ObjTrans_spin_changed = {
                              "ObjTrans_spin"                  : "numberCopies",
                             }
+                            
+        self.connections_for_ObjTrans_return_pressed = { 
+                             "ObjTrans_start_x"           : "start_x_entered",
+                             "ObjTrans_start_y"           : "start_y_entered",
+                             "ObjTrans_start_z"           : "start_z_entered",
+                             "ObjTrans_end_x"             : "end_x_entered",
+                             "ObjTrans_end_y"             : "end_y_entered",
+                             "ObjTrans_end_z"             : "end_z_entered",
+                             }
                                            
         self.connections_for_ObjRot_slider_changed = {                    
                              "ObjRot_horizontalSlider"    : "angle_value_changed",
@@ -1267,22 +1534,26 @@ class ObjectRotationTab():
                                    QtCore.SIGNAL("pressed()"),getattr(self.trans, str(m_val)))
                                         
         for m_key, m_val in self.connections_for_ObjTrans_combobox_changed.items():
-            print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.trans, str(m_val))) )                            
+            func.print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.trans, str(m_val))) )                            
             QtCore.QObject.connect(getattr(self.ui, str(m_key)),
                                    QtCore.SIGNAL(_fromUtf8("currentIndexChanged(QString)")),getattr(self.trans, str(m_val)))     
 
         for m_key, m_val in self.connections_for_ObjTrans_checkbox_toggled.items():
             #print_msg( "Connecting : " + str(m_key) + " and " + str(m_val) )
-            print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.trans, str(m_val))) ) 
+            func.print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.trans, str(m_val))) ) 
             QtCore.QObject.connect(getattr(self.ui, str(m_key)),
                                    QtCore.SIGNAL(_fromUtf8("toggled(bool)")),getattr(self.trans, str(m_val)))  
               
 
         for m_key, m_val in self.connections_for_ObjTrans_spin_changed.items():
-            print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.trans, str(m_val))) ) 
+            func.print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.trans, str(m_val))) ) 
             QtCore.QObject.connect(getattr(self.ui, str(m_key)),
                                    QtCore.SIGNAL("valueChanged(int)"),getattr(self.trans, str(m_val))) 
 
+        for m_key, m_val in self.connections_for_ObjTrans_return_pressed.items():
+            func.print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.trans, str(m_val))) )
+            QtCore.QObject.connect(getattr(self.ui, str(m_key)),
+                                   QtCore.SIGNAL("returnPressed()"),getattr(self.trans, str(m_val)))
                                    
         self.m_dialog.show()
         m_text=str(myRelease)
