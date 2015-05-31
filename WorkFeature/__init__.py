@@ -2,17 +2,22 @@
 
 """
 ***************************************************************************
-*   Thanks to original ideas and codes from :                             *
-*   Javier Martinez Garcia 2014, 2015 for ideas and first WF codes        * 
+*   Thanks to original ideas, codes, and support from :                   *
+*   - Javier Martinez Garcia 2014, 2015 for ideas and first WF codes      * 
 *     for tje code on parallelism of two faces                            *
-*   Gui ideas from by Jonathan Wiedemann 2014                             *
-*   Jonathan Wiedemann for view codes                                     *
-*   galou_breizh for macro which creates a circle from 3 selected points  *
-*   Eriossoltero for macro Ellipse-Center+2Points                         *
-*   Many Thanks to wmayer for his active help on testing and debbuging    *
-*   Special thanks to Mario52 for FCCamera code, cutCircle, cutWire...    * 
-*      for bounding box codes, advices, diverse pieces of codes           * 
-*      and all discussions...merci Mario                                  *
+*   - Jonathan Wiedemann for Gui ideas and for view codes 2014            * 
+*     and support                                                         *
+*   - NormandC for his support                                            *
+*   - Yorick for his support                                              *
+*   - galou_breizh for macro which creates a circle from 3 selected points*
+*   - Eriossoltero for macro Ellipse-Center+2Points                       *
+*   - Ulrich Brammer for Geodesic dome code                               *
+*   - Wmayer Many Thanks for active help on testing and debbuging         *
+*   Special thanks to Mario52 for diverse MACRO codes as FCCamera,        *
+*   cutCircle, cutWire, Delta xyz, bounding box ...                       *
+*   and other diverse pieces of codes                                     * 
+*   and all discussions, support, advices, help...merci Mario             *
+*   Thanks also to those I forget.                                        *
 ***************************************************************************
 ***************************************************************************
 *   FreeCAD Work Features / version 2015-02                               *
@@ -22,6 +27,7 @@
 *   Copyright (c) 2013, 2014 Jonathan Wiedemann                           *
 *   Copyright (c) 2014, 2015 Mario52                                      *
 *   Copyright (c) 2013 galou_breizh                                       *
+*   Copyright (c) 2015 Ulrich Brammer <ulrich1a[at]users.sourceforge.net> *
 *   Copyright (c) Eriossoltero                                            *
 *                                                                         *
 *   This file is a supplement to the FreeCAD CAx development system.      *
@@ -52,7 +58,7 @@ if not sys.path.__contains__("/usr/lib/freecad/lib"):
 import WFGui_2015 as WFGui
 from   WF_ObjRot_2015 import *
 global myRelease
-myRelease = "2015_05_23"
+myRelease = "2015_05_31"
 
 import os.path
 import math
@@ -88,7 +94,7 @@ myObject = None
 global centerOfMass
 centerOfMass=True
 global verbose
-verbose=1
+verbose=0
 global tolerance
 tolerance=1e-10
 global biColor
@@ -103,10 +109,12 @@ m_numberAxisCutWire = 2
 m_numberCircleCut = 2
 m_numberPlane = 1
 m_numberLine = 1
+m_numberLine2 = 1
 m_numberPoint = 1
 m_distanceLinePoint = 0.0
 m_extensionTwoPointsAxis = 0.0
 m_extensionLinePointAxis = 0.0
+m_extensionLine = 0.0
 m_radiusCircle = 10.0
 m_extensionFaceNormal = 0.0
 m_extensionPlanePointPlane = 0.0
@@ -114,6 +122,9 @@ m_anglePlaneAxisPlane = 0.0
 m_lengthPlane = 10.0
 m_distPlane = 10.0
 m_distLine = 10.0
+m_angleLine = 45.0
+m_angleAlignFaces = 0.0
+m_angleAlignEdges = 0.0
 m_distPoint = 10.0
 m_diameterCylinder = 2.0
 m_lengthCylinder = 20.0 
@@ -128,6 +139,9 @@ m_attach_point = "Mid"
 m_cut_selectObjects = []
 m_angleCutObject = 0.0
 m_thicknessCutObject = 0.0
+m_diameterSphere = 10.0
+m_diameterDome = 10.0
+m_frequencyDome = 2
 
 m_callback = None
 m_clickForPoint = True
@@ -311,7 +325,7 @@ def createFolders(folder=None):
             App.ActiveDocument.addObject("App::DocumentObjectGroup","WorkFeatures")    
         except:
             printError_msg("Could not Create 'WorkFeatures' Objects Group!")
-    m_list_dirs = ['Origin','WorkPoints','WorkAxis','WorkPlanes','WorkCircles','WorkBoxes','WorkObjects']
+    m_list_dirs = ['Origin','WorkPoints','WorkAxis','WorkPlanes','WorkCircles','WorkBoxes','WorkObjects','Rot_Trans']
     for m_dir in m_list_dirs:     
         if folder == m_dir:
             if not(App.ActiveDocument.getObject(str(m_dir))):
@@ -464,7 +478,7 @@ def get_SelectedObjects(info=0, printError=True):
         Selection = (Number_of_Points, Number_of_Edges, Number_of_Planes,
                     Selected_Points, Selected_Edges, Selected_Planes)
     """
-    m_actDoc=get_ActiveDocument(info=1)
+    m_actDoc=get_ActiveDocument(info=0)
     
     if m_actDoc.Name:    
         # Return a list of SelectionObjects for a given document name.
@@ -502,6 +516,8 @@ def get_SelectedObjects(info=0, printError=True):
                            "Selected_Points, Selected_Edges, Selected_Planes = " + str(Selection))
             return Selection
         else:
+            if info != 0:
+                print_msg("No Object selected !")
             if printError:
                 printError_msg("Select at least one object !")
             return None
@@ -801,12 +817,70 @@ def centerCirclePoint(edge,info=0):
 
 
 def distanceBetween(A, B):
-    """ return the distance between 2 points
+    """ Return the distance between 2 points.
     """
+    # if isinstance(A,FreeCAD.Vector) and isinstance(B,FreeCAD.Vector):
     line = Part.Line(A,B)
     edge = line.toShape()
     return edge.Length
+
+   
+def angleBetween(e1, e2):
+    """ Return the angle (in degrees) between 2 edges.
+    """
+    if isinstance(e1,Part.Edge) and isinstance(e2,Part.Edge):
+        # Create the Vector for first edge
+        v1 = e1.Vertexes[-1].Point
+        v2 = e1.Vertexes[0].Point
+        ve1 = v1.sub(v2)
+        # Create the Vector for second edge
+        v3 = e2.Vertexes[-1].Point
+        v4 = e2.Vertexes[0].Point
+        ve2 = v3.sub(v4)
+    elif isinstance(e1,Base.Vector) and isinstance(e2,Base.Vector):
+        ve1 = e1
+        ve2 = e2
+    elif isinstance(e1,Part.Edge) and isinstance(e2,Base.Vector):
+        v1 = e1.Vertexes[-1].Point
+        v2 = e1.Vertexes[0].Point
+        ve1 = v1.sub(v2)
+        ve2 = e2
+    elif isinstance(e1,Base.Vector) and  isinstance(e2,Part.Edge):
+        ve1 = e1
+        v3 = e2.Vertexes[-1].Point
+        v4 = e2.Vertexes[0].Point
+        ve2 = v3.sub(v4)   
+    else:
+        return
     
+    angle = ve1.getAngle(ve2)
+    import math
+    return math.degrees(angle), angle
+
+
+def edgeToVector(edge):
+    """ Return a vector from an edge or a Part.line.
+    """
+    if isinstance(edge,Part.Shape):
+        return edge.Vertexes[-1].Point.sub(edge.Vertexes[0].Point)
+    elif isinstance(edge,Part.Line):
+        return edge.EndPoint.sub(edge.StartPoint)
+    else:
+        return None
+
+    
+def colinearEdges(edge1, edge2, info=0, tolerance=1e-12):
+    """ Return true if 2 edges are colinear.
+    """ 
+    if not isinstance(edge1.Curve,Part.Line):
+        return False
+    if not isinstance(edge2.Curve,Part.Line):
+        return False
+    A = edgeToVector(edge1)
+    B = Base.Vector(0, 0, 0)
+    C = edgeToVector(edge2)
+    return colinearVectors(A, B, C, info=info, tolerance=tolerance)
+
 
 def colinearVectors(A, B, C, info=0, tolerance=1e-12):
     """ Return true if the 3 points are aligned.
@@ -1427,7 +1501,7 @@ def plot_axis(Vector_A, Vector_B, part, name, grp="WorkAxis"):
     return axis_User_Name, axis 
 
 
-def plot_circle(Radius, Position, Direction, part= "Part::Feature", name= "Circle", grp="WorkCircles"):
+def plot_circle(Radius, Position, Direction, part="Part::Feature", name="Circle", grp="WorkCircles"):
     if not(App.ActiveDocument.getObject( grp )):
         App.ActiveDocument.addObject("App::DocumentObjectGroup", grp)    
     circle = App.ActiveDocument.addObject(part, name)
@@ -1438,7 +1512,7 @@ def plot_circle(Radius, Position, Direction, part= "Part::Feature", name= "Circl
     return circle_User_Name, circle 
 
     
-def plot_arc(center, normal, radius, startangle, endangle, part= "Part::Feature", name= "Circle", grp="WorkCircles"):
+def plot_arc(center, normal, radius, startangle, endangle, part="Part::Feature", name="Circle", grp="WorkCircles"):
     if not(App.ActiveDocument.getObject( grp )):
         App.ActiveDocument.addObject("App::DocumentObjectGroup", grp)    
     arc = App.ActiveDocument.addObject(part, name)
@@ -1586,6 +1660,49 @@ def plot_cylinder(radius, height, point, axis, part, name, grp="WorkObjects"):
     return cylinder_User_Name, cylinder
 
 
+def plot_sphere(Radius, Point, part="Part::Feature", name="Sphere", grp="WorkObjects"):
+    """    
+    makeSphere(radius,[pnt, dir, angle1,angle2,angle3]) -- Make a sphere with a given radius
+    By default pnt=Vector(0,0,0), dir=Vector(0,0,1), angle1=0, angle2=90 and angle3=360
+    """
+    if not(App.ActiveDocument.getObject( grp )):
+        App.ActiveDocument.addObject("App::DocumentObjectGroup", grp)       
+    sphere = App.ActiveDocument.addObject(part, name)    
+    Sphere = Part.makeSphere(Radius, Point)
+    sphere.Shape = Sphere        
+    App.ActiveDocument.getObject( grp ).addObject( sphere )
+    sphere_User_Name = sphere.Label
+    Gui.ActiveDocument.getObject( sphere_User_Name ).PointColor = (1.00,0.67,0.00)
+    Gui.ActiveDocument.getObject( sphere_User_Name ).LineColor = (1.00,0.67,0.00)
+    Gui.ActiveDocument.getObject( sphere_User_Name ).ShapeColor = (0.00,0.33,1.00)
+    Gui.ActiveDocument.getObject( sphere_User_Name ).Transparency = 75
+    return sphere_User_Name, sphere
+
+
+def plot_Dome(Point, Radius, Frequency, part="Part::Feature", name="Dome", grp="WorkObjects"):
+    print_msg("plot_Dome :")    
+    if not(App.ActiveDocument.getObject( grp )):
+        App.ActiveDocument.addObject("App::DocumentObjectGroup", grp)        
+    dome = App.ActiveDocument.addObject(part, name)
+    icosahedre = App.ActiveDocument.addObject(part, "Icosahedre")    
+    Dome, Icosahedron = makeDome(Point, Radius, Frequency)
+
+    icosahedre.Shape = Icosahedron          
+    App.ActiveDocument.getObject( grp ).addObject( icosahedre )    
+    dome_User_Name = icosahedre.Label
+    if Dome != None:
+        dome.Shape = Dome
+        App.ActiveDocument.getObject( grp ).addObject( dome )
+        dome_User_Name = dome.Label        
+        Gui.ActiveDocument.getObject(icosahedre.Label).Visibility=False
+       
+    Gui.ActiveDocument.getObject( dome_User_Name ).PointColor = (1.00,0.67,0.00)
+    Gui.ActiveDocument.getObject( dome_User_Name ).LineColor = (1.00,0.67,0.00)
+    Gui.ActiveDocument.getObject( dome_User_Name ).ShapeColor = (0.00,0.33,1.00)
+    Gui.ActiveDocument.getObject( dome_User_Name ).Transparency = 75        
+    return dome_User_Name, dome   
+
+    
 def bounding_box(grp,ori_X,ori_Y,ori_Z,length_X,length_Y,length_Z,info=0):
     """ Create a bounding box.
     """
@@ -1726,7 +1843,7 @@ def plot_originObject():
             Axis_User_Name = Axis.Label
             Gui.ActiveDocument.getObject(Axis_User_Name).LineColor = (1.00,0.00,0.00)
             Gui.ActiveDocument.getObject(Axis_User_Name).PointColor = (1.00,0.00,0.00)
-            Gui.ActiveDocument.getObject("Ori_X_Axis").Visibility=False
+            Gui.ActiveDocument.getObject("Ori_X_Axis").Visibility=True
             
             #Work-AxisY
             AY_Length = 300
@@ -1739,7 +1856,7 @@ def plot_originObject():
             Axis_User_Name = Axis.Label
             Gui.ActiveDocument.getObject(Axis_User_Name).LineColor = (0.00,0.67,0.00)
             Gui.ActiveDocument.getObject(Axis_User_Name).PointColor = (0.00,0.67,0.00)
-            Gui.ActiveDocument.getObject("Ori_Y_Axis").Visibility=False
+            Gui.ActiveDocument.getObject("Ori_Y_Axis").Visibility=True
             
             #Work-AxisZ
             AZ_Length = 300
@@ -1752,7 +1869,7 @@ def plot_originObject():
             Axis_User_Name = Axis.Label
             Gui.ActiveDocument.getObject(Axis_User_Name).LineColor =  (0.33,0.00,1.00)
             Gui.ActiveDocument.getObject(Axis_User_Name).PointColor =  (0.33,0.00,1.00)
-            Gui.ActiveDocument.getObject("Ori_Z_Axis").Visibility=False
+            Gui.ActiveDocument.getObject("Ori_Z_Axis").Visibility=True
             
             # Work-PlaneXY
             PXY_A_SIZE = 300
@@ -1911,7 +2028,6 @@ def plot_centerObjectPoint():
 def plot_NpointsPoint():
     """Create a Point at mean location of all selected points.
     """
-    global verbose
     msg=verbose
 
     m_actDoc = get_ActiveDocument(info=msg)
@@ -2106,10 +2222,13 @@ def plot_alongLinePoint():
     """ Plot a point at a certain distance along the line respecting to the choosen 
     reference starting point.
     """
-    msg=0
+    msg=verbose
     createFolders('WorkPoints')
-    error_msg = "Unable to create a point along a Line : \nSelect one Edge and one Point only!"
-    result_msg = " : Point along a Line created !"
+    error_msg =\
+    "Unable to create a point along a Line : \n" +\
+    "Select one Edge and one Point on this Edge only !\n" +\
+    "or Select one Edge only and the first point of this Edge will be used as ref.!"
+    result_msg =" : Point along a Line created !"
     name = "PointLine"
     part = "Part::Feature"
     Selection = get_SelectedObjects(info=msg, printError=False)    
@@ -2118,8 +2237,8 @@ def plot_alongLinePoint():
         Number_of_Points = SelectedObjects[0]
         Number_of_Edges  = SelectedObjects[1]
         if msg != 0:
-            print_msg("Number_of_Edges=" + str(Number_of_Edges) +
-                      " Number_of_Points=" + str(Number_of_Points))
+            print_msg("Number_of_Edges=" + str(Number_of_Edges))
+            print_msg("Number_of_Points=" + str(Number_of_Points))
         if (Number_of_Edges == 1) and (Number_of_Points) == 1 :
             Point_List = SelectedObjects[3]
             Edge_List  = SelectedObjects[4]
@@ -2127,23 +2246,47 @@ def plot_alongLinePoint():
                 print_msg(str(Point_List))
                 print_msg(str(Edge_List))
             Vector_C = Point_List[0].Point
-            Vector_A = Edge_List[0].valueAt( 0.0 )
-            Vector_B = Edge_List[0].valueAt( Edge_List[0].Length )
+            Vector_A = Edge_List[0].Vertexes[0].Point
+            Vector_B = Edge_List[0].Vertexes[-1].Point
             if msg != 0:
                 print_point(Vector_C, msg="Reference Point : ")
                 print_point(Vector_A, msg="Point A : ")
                 print_point(Vector_B, msg="Point B : ")
-            if colinearVectors(Vector_A, Vector_B, Vector_C, info=1):
+            if colinearVectors(Vector_A, Vector_B, Vector_C, info=msg):
                 Vector_Translate = (Vector_B - Vector_A)
-                #print_point(Vector_Translate, msg="Vector_Translate")
+                if msg != 0:
+                    print_point(Vector_Translate, msg="Vector_Translate")
                 Vector_Translate = Vector_Translate.normalize() * m_distanceLinePoint
-                #print_point(Vector_Translate, msg="Vector_Translate")
+                if msg != 0:
+                    print_point(Vector_Translate, msg="Vector_Translate")
                 Vector_Line_Point = Vector_C + Vector_Translate
                 
                 Center_User_Name = plot_point(Vector_Line_Point, part, name)
+                
                 print_point(Vector_Line_Point,str(Center_User_Name) + result_msg + " at :")
             else:
                 printError_msg("The Point and the line MUST be aligned !")
+        elif (Number_of_Edges == 1) and (Number_of_Points) == 0 :
+            Edge_List  = SelectedObjects[4]
+            if msg != 0:
+                print_msg(str(Edge_List))
+            Vector_C = Edge_List[0].Vertexes[0].Point
+            Vector_A = Edge_List[0].Vertexes[0].Point
+            Vector_B = Edge_List[0].Vertexes[-1].Point
+            if msg != 0:
+                print_point(Vector_C, msg="Reference Point : ")
+                print_point(Vector_A, msg="Point A : ")
+                print_point(Vector_B, msg="Point B : ") 
+            Vector_Translate = (Vector_B - Vector_A)
+            if msg != 0:
+                print_point(Vector_Translate, msg="Vector_Translate")
+            Vector_Translate = Vector_Translate.normalize() * m_distanceLinePoint
+            if msg != 0:
+                print_point(Vector_Translate, msg="Vector_Translate")
+            Vector_Line_Point = Vector_C + Vector_Translate
+            
+            Center_User_Name = plot_point(Vector_Line_Point, part, name)
+            print_point(Vector_Line_Point,str(Center_User_Name) + result_msg + " at :") 
         else:
             printError_msg(error_msg)
     except:
@@ -2271,35 +2414,48 @@ def plot_lineFacePoint():
 
      
 def plot_pointLinePoint():
-    """ Plot the intersection point T on a Line given one Line and One Point C.
-    The Vector TC is perpendicular to the line.
+    """ Point(s)=(Point(s),Line(s)):
+        Create projection(s) of Point(s) onto Line(s).
+        Plot the intersection point T on a Line given one Linee and One Point C.
+        The Vector TC is perpendicular to the Line.
+        The symetric point Cprime is also created as TC=TCprime.
+        - First select one (or several) Point(s)
+        - Second select one or several) Line(s)
     """
-    msg=0
+    msg=verbose
     createFolders('WorkPoints')
-    error_msg = "Unable to create (Point,Line) Intersection : \nSelect one Line and one Point not on the Line !"
+    error_msg = "Unable to create (Point,Line) Intersection : \n"+\
+                "Select at least one Line and one Point not on the Line !"
     result_msg = " : (Point,Line) Intersection and symetric are created !"
     name = "PointLinePoint"
     part = "Part::Feature"
-    Selection = get_SelectedObjects(info=msg)
+    Selection = get_SelectedObjects(info=msg, printError=False)
     try:        
         SelectedObjects = Selection
         Number_of_Points = SelectedObjects[0]
         Number_of_Edges  = SelectedObjects[1]
-        if (Number_of_Points == 1) and (Number_of_Edges == 1):
+        if msg != 0:
+            print_msg(" Number_of_Points=" + str(Number_of_Points))
+            print_msg(" Number_of_Edges=" + str(Number_of_Edges))   
+        if (Number_of_Points >= 1) and (Number_of_Edges >= 1):
             Point_List = SelectedObjects[3]
             Edge_List  = SelectedObjects[4]
-            Vector_A = Edge_List[0].valueAt( 0.0 )
-            Vector_B = Edge_List[0].valueAt( Edge_List[0].Length )
-            Vector_C = Point_List[0].Point
+                        
+            for Selected_Edge in Edge_List:
+                for Selected_Point in Point_List:
+                    
+                    Vector_A = Selected_Edge.valueAt( 0.0 )
+                    Vector_B = Selected_Edge.valueAt( Edge_List[0].Length )
+                    Vector_C = Selected_Point.Point
             
-            Vector_T, Distance, Vector_Tprime = intersecPerpendicularLine(Vector_A, Vector_B, Vector_C, info=0)
+                    Vector_T, Distance, Vector_Tprime = intersecPerpendicularLine(Vector_A, Vector_B, Vector_C, info=0)
             
-            Center_User_Name = plot_point(Vector_T, part, name)
-            print_point(Vector_T,str(Center_User_Name) + result_msg + " at :")
-            Center_User_Name2 = plot_point(Vector_Tprime, part, name)
-            print_point(Vector_Tprime,str(Center_User_Name2) + result_msg + " at :")
+                    Center_User_Name = plot_point(Vector_T, part, name)
+                    print_point(Vector_T,str(Center_User_Name) + result_msg + " at :")
+                    Center_User_Name2 = plot_point(Vector_Tprime, part, name)
+                    print_point(Vector_Tprime,str(Center_User_Name2) + result_msg + " at :")
             
-            print_msg(str(Center_User_Name) + result_msg + " at a distance from the line of " + str(Distance))
+                    print_msg(str(Center_User_Name) + result_msg + " at a distance from the line of " + str(Distance))
         else:
             printError_msg(error_msg)
     except:
@@ -2307,39 +2463,45 @@ def plot_pointLinePoint():
 
 
 def plot_pointFacePoint():
-    """ Plot the intersection point T on a Plane given one Plane and One Point C.
-    The Vector TC is perpendicular to the plane.
+    """ Point(s)=(Point(s),Face(s)):
+        Plot the intersection point T on a Plane given one Plane and One Point C.
+        The Vector TC is perpendicular to the plane.
+        Create projection(s) of Point(s) onto Face(s).
+        - First select one (or several) Point(s)
+        - Second select one or several) Plane(s)
     """
-    msg=0
+    msg=verbose
     createFolders('WorkPoints')
-    error_msg = "Unable to create (Point,Face) Intersection : \nSelect one Face and one Point not on the Face !"
-    result_msg = " : (Point,Face) Intersection and symetric are created !"
+    error_msg = "Unable to create (Point,Face) Intersection : \n"+\
+                "Select at least one Face and one Point not on the Face !"
+    result_msg = " : (Point,Face) Intersection created !"
     name = "PointFacePoint"
     part = "Part::Feature"
-    Selection = get_SelectedObjects(info=msg)
+    
+    Selection = get_SelectedObjects(info=msg, printError=False)
     try:        
         SelectedObjects = Selection
         Number_of_Points = SelectedObjects[0]
         Number_of_Planes = SelectedObjects[2]
-        #print_msg(" Number_of_Points=" + str(Number_of_Points))
-        #print_msg(" Number_of_Planes=" + str(Number_of_Planes))
-        if (Number_of_Points == 1) and (Number_of_Planes == 1):
+        if msg != 0:
+            print_msg(" Number_of_Points=" + str(Number_of_Points))
+            print_msg(" Number_of_Planes=" + str(Number_of_Planes))
+        if (Number_of_Points >= 1) and (Number_of_Planes >= 1):
             Point_List = SelectedObjects[3]
             Plane_List = SelectedObjects[5]
             
-            Selected_Plane = Plane_List[0]
-            Vector_C = Point_List[0].Point
+            for Selected_Plane in Plane_List:
+                for Selected_Point in Point_List:                
+                    Vector_C = Selected_Point.Point            
+                    Plane_Point = Selected_Plane.CenterOfMass
+                    Plane_Normal = Selected_Plane.normalAt(0,0)
             
-            Plane_Point = Selected_Plane.CenterOfMass
-            Plane_Normal = Selected_Plane.normalAt(0,0)
+                    Vector_B = Vector_C + Plane_Normal
             
-            Vector_B = Vector_C + Plane_Normal
+                    Vector_T = intersecLinePlane(Vector_C, Vector_B, Plane_Normal, Plane_Point, info=0)
             
-            Vector_T = intersecLinePlane(Vector_C, Vector_B, Plane_Normal, Plane_Point, info=0)
-            
-            Center_User_Name = plot_point(Vector_T, part, name)
-            print_point(Vector_T,str(Center_User_Name) + result_msg + " at :")
-            
+                    Center_User_Name = plot_point(Vector_T, part, name)
+                    print_point(Vector_T,str(Center_User_Name) + result_msg + " at :")            
         else:
             printError_msg(error_msg)
     except:
@@ -2724,9 +2886,11 @@ def plot_baseObjectPoint():
         printError_msg(error_msg)        
 
 
+
+
 def point_toSketch():
     """ Transform Point(s) in Sketch's Point(s) by projection onto the Sketch's Plane:
-    - First select an existing Skecth;
+    - First select an existing Sketch;
     - Select as much as Points needed;
     Then click on this button.
     """
@@ -3041,54 +3205,90 @@ def plot_cylinderAxis():
             printError_msg(error_msg)
     except:
         printError_msg(error_msg)
-        
-        
-
-
+            
 
 def plot_planeAxis():
     """ Plot 2 Axis perpendicular to a Plane and passing trougth center.
     """
-    msg=0
+    msg=verbose
+    global m_extensionFaceNormal
+    
+    def plot_normalAt(Selected_Plane, Point_A):
+        if m_extensionFaceNormal != 0.0:
+            Length = m_extensionFaceNormal
+        else:
+            Length = Selected_Plane.Length * 0.1
+        if msg != 0:                    
+            print_point(Point_A, msg="Point_A : ")
+            print_msg("Length = " + str(Length))
+        Normal = Selected_Plane.normalAt(0,0)
+        Normal = Normal.normalize().multiply(Length)            
+        Point_B = App.Vector(Point_A) + Normal
+        Point_Bprime = App.Vector(Point_A) - Normal
+        if msg != 0:
+            print_point(Normal, msg="Normal : ")                    
+            print_point(Point_B, msg="Point_B : ")
+            print_point(Point_Bprime, msg="Point_Bprime : ")
+        
+        Axis_User_Name, axis = plot_axis(Point_B, Point_A, part, name)
+        print_msg(str(Axis_User_Name) + result_msg )
+        Axis_User_Name, axis = plot_axis(Point_Bprime, Point_A, part, name)
+        print_msg(str(Axis_User_Name) + result_msg )
+
+
     createFolders('WorkAxis')
     error_msg = "Unable to create Plane Axis : \nSelect at least one plane face !"
     result_msg = " : Plane Axis created !"
     name = "Axis"
     part = "Part::Feature"
-    global m_extensionFaceNormal
+
     Selection = get_SelectedObjects(info=msg, printError=False)
     try:
         SelectedObjects = Selection
         Number_of_Planes = SelectedObjects[2]
-        #print_msg(" Number_of_Planes=" + str(Number_of_Planes))
-        if (Number_of_Planes) >= 1 :
-            Plane_List = SelectedObjects[5]
-            for i in range( Number_of_Planes ):
+        Number_of_Points = SelectedObjects[0]
+        if msg != 0:
+            print_msg(" Number_of_Planes=" + str(Number_of_Planes))
+            print_msg(" Number_of_Points=" + str(Number_of_Points))
+        Point_List = SelectedObjects[3]
+        Plane_List = SelectedObjects[5]
+        if msg != 0:
+            print_msg(" Point_List=" + str(Point_List))
+            print_msg(" Plane_List=" + str(Plane_List))
+        
+        if (Number_of_Planes == 0 ):
+                printError_msg(error_msg)
+                return
+        
+        if (Number_of_Points == 0 ):
+            for Selected_Plane in Plane_List:
                 try:
-                    Selected_Plane = Plane_List[i]
                     #print_msg(str(Selected_Plane))
                     Point_A = Selected_Plane.CenterOfMass
-                    if m_extensionFaceNormal != 0.0:
-                        Length = m_extensionFaceNormal
-                    else:
-                        Length = Selected_Plane.Length * 0.1                    
-                    #print_point(Point_A, msg="Point_A : ")
-                    #print_msg("Length = " + str(Length))
-                    Normal = Selected_Plane.normalAt(0,0)
-                    Normal = Normal.normalize().multiply(Length)
-                    #print_point(Normal, msg="Normal : ")
-                    Point_B = App.Vector(Point_A) + Normal
-                    Point_Bprime = App.Vector(Point_A) - Normal                                                           
-                    #Point_B = Point_B.normalize().multiply(Length)
-                    
-                    Axis_User_Name, axis = plot_axis(Point_B, Point_A, part, name)
-                    print_msg(str(Axis_User_Name) + result_msg )
-                    Axis_User_Name, axis = plot_axis(Point_Bprime, Point_A, part, name)
-                    print_msg(str(Axis_User_Name) + result_msg )
+                    plot_normalAt(Selected_Plane, Point_A)
                 except:
                     printError_msg("Non Planar Surface !")
-        else:
-            printError_msg(error_msg)
+        else:                
+            if Number_of_Points >= Number_of_Planes:
+
+                if Number_of_Points == Number_of_Planes:
+                    if msg != 0:
+                        print_msg(" Number_of_Points = Number_of_Planes")
+                    for Selected_Plane, Selected_Point in zip(Plane_List, Point_List):
+                     if msg != 0:
+                         print_msg(" Selected_Plane=" + str(Selected_Plane))
+                         print_msg(" Selected_Point=" + str(Selected_Point))
+                     plot_normalAt(Selected_Plane, Selected_Point.Point) 
+                else :
+                    if msg != 0:
+                        print_msg(" Number_of_Points > Number_of_Planes")
+                    for Selected_Plane, Selected_Point in itertools.izip_longest(Plane_List, Point_List,fillvalue=Plane_List[-1]):
+                        if msg != 0:
+                             print_msg(" Selected_Plane=" + str(Selected_Plane))
+                             print_msg(" Selected_Point=" + str(Selected_Point))
+                        plot_normalAt(Selected_Plane, Selected_Point.Point) 
+            else:
+                printError_msg(error_msg)
     except:
         printError_msg(error_msg)  
         
@@ -3287,10 +3487,10 @@ def extensionLinePointAxis(value):
     except ValueError:
         printError_msg("Extension must be valid number !")
 
-        
+
 def plot_linePointAxis():
     """ 
-    Plot  an Axis Perpendicular to an Axis and crossing a Point
+    Plot an Axis Perpendicular to an Axis and crossing a Point
     -Select one Axis and one Point NOT on the previous Axis.
     """ 
     msg=0   
@@ -3309,39 +3509,40 @@ def plot_linePointAxis():
         if msg != 0:
             print_msg("Number_of_Edges=" + str(Number_of_Edges) +
                       " Number_of_Points=" + str(Number_of_Points))
-        if (Number_of_Edges == 1) and (Number_of_Points) == 1 :
+        if (Number_of_Edges == 1) and (Number_of_Points) >= 1 :
             Point_List = SelectedObjects[3]
             Edge_List  = SelectedObjects[4]
             if msg != 0:
                 print_msg(str(Point_List))
                 print_msg(str(Edge_List))
-            Vector_C      = Point_List[0].Point
-            Vector_A      = Edge_List[0].valueAt( 0.0 )
-            Vector_B      = Edge_List[0].valueAt( Edge_List[0].Length )
-            
-            Vector_T, Distance, Vector_Tprime = intersecPerpendicularLine(Vector_A, Vector_B, Vector_C, info=msg)
-            
-            print_msg("Distance from the Point to the Axis is : " + str(Distance) )
-            
-            Axis_dir = Vector_C - Vector_T
-            Axis_E1 = Vector_C            
-            Axis_E2 = Vector_T
-            
-            if m_extensionLinePointAxis != 0.0:
-                Axis_E1 = Vector_C +  Axis_dir.normalize().multiply(m_extensionLinePointAxis)
-                if m_extensionLinePointAxis >= 0.0:            
-                    Axis_E2 = Vector_T -  Axis_dir.normalize().multiply(m_extensionLinePointAxis)
-                else:
-                    Axis_E2 = Vector_T +  Axis_dir.normalize().multiply(m_extensionLinePointAxis)
-            
-            Axis_User_Name, axis = plot_axis(Axis_E1, Axis_E2, part, name)
-
-            print_msg(str(Axis_User_Name) + result_msg )
+            for Selected_Point in Point_List:
+                Vector_C      = Selected_Point.Point
+                Vector_A      = Edge_List[0].valueAt( 0.0 )
+                Vector_B      = Edge_List[0].valueAt( Edge_List[0].Length )
+                
+                Vector_T, Distance, Vector_Tprime = intersecPerpendicularLine(Vector_A, Vector_B, Vector_C, info=msg)
+                
+                print_msg("Distance from the Point to the Axis is : " + str(Distance) )
+                
+                Axis_dir = Vector_C - Vector_T
+                Axis_E1 = Vector_C            
+                Axis_E2 = Vector_T
+                
+                if m_extensionLinePointAxis != 0.0:
+                    Axis_E1 = Vector_C +  Axis_dir.normalize().multiply(m_extensionLinePointAxis)
+                    if m_extensionLinePointAxis >= 0.0:            
+                        Axis_E2 = Vector_T -  Axis_dir.normalize().multiply(m_extensionLinePointAxis)
+                    else:
+                        Axis_E2 = Vector_T +  Axis_dir.normalize().multiply(m_extensionLinePointAxis)
+                
+                Axis_User_Name, axis = plot_axis(Axis_E1, Axis_E2, part, name)
+    
+                print_msg(str(Axis_User_Name) + result_msg )
         else:
             printError_msg(error_msg) 
     except:
         printError_msg(error_msg)
-
+        
     
 def plot_planeLinePointAxis():
     """
@@ -3499,12 +3700,28 @@ def plot_planeLinePointAxis():
             printError_msg(error_msg)
     except:
         printError_msg(error_msg)
-    
+
+
+def extensionLine(value):
+    """ Respond to the change in extension value from the text box.
+    """        
+    try:
+        # First we check if a valid number have been entered
+        global m_extensionLine
+        if str(value) == '-':
+            return
+        m_extensionLine  = float(value)
+        print_msg("New extension is :" + str(m_extensionLine))
+    except ValueError:
+        printError_msg("Extension must be valid number !")
+               
     
 def plot_pointLineAxis():
     """ 
-    Plot an Axis Parallel to an Axis and crossing a Point.
-    -Select one Axis and one Point NOT on the previous Axis.
+    Create an Axis Parallel to an Axis (as Direction) and crossing a Point.
+    - Select one Axis and one (or several) Point(s) NOT on the previous Axis.
+    Define the length and the attach point if needed.
+    A Length of Zero means the length of already selected Axis will be used.
     """
     msg=0
     createFolders('WorkAxis')
@@ -3520,34 +3737,44 @@ def plot_pointLineAxis():
         Number_of_Edges  = SelectedObjects[1]
         if msg != 0:
             print_msg("Number_of_Edges=" + str(Number_of_Edges) + " Number_of_Points=" + str(Number_of_Points))
-        if (Number_of_Edges == 1) and (Number_of_Points) == 1 :
+        if (Number_of_Edges == 1) and (Number_of_Points) >= 1 :
             Point_List = SelectedObjects[3]
             Edge_List  = SelectedObjects[4]
             if msg != 0:
                 print_msg(str(Point_List))
-                print_msg(str(Edge_List))
-            Vector_Cprime = Point_List[0].Point
+                print_msg(str(Edge_List)) 
             Vector_A      = Edge_List[0].valueAt( 0.0 )
             Vector_B      = Edge_List[0].valueAt( Edge_List[0].Length )
             Vector_C      = centerLinePoint(Edge_List[0],info=1)
-            Vector_Translate = (Vector_Cprime - Vector_C)
-            Vector_Aprime = Vector_A + Vector_Translate
-            Vector_Bprime = Vector_B + Vector_Translate
+               
+            if m_extensionLine != 0.0:                    
+                AB_Vector = Vector_B.sub(Vector_A)
+                new_Vector = AB_Vector.normalize().multiply(m_extensionLine/2.)
+                Vector_A = Vector_C.sub(new_Vector)
+                Vector_B = Vector_C.add(new_Vector)
+                
+            for Selected_Point in Point_List:
+                #Vector_Cprime = Point_List[0].Point
+                Vector_Cprime = Selected_Point.Point
+                Vector_Translate = (Vector_Cprime - Vector_C)
 
-            if str(m_attach_point) == "Start":
-                Vector_Translate2 = (Vector_A - Vector_B)
-                Vector_Translate2 = Vector_Translate2.multiply(0.5)
-                Vector_Aprime = Vector_Aprime + Vector_Translate2
-                Vector_Bprime = Vector_Bprime + Vector_Translate2   
-            if str(m_attach_point) == "End":
-                Vector_Translate2 = (Vector_B - Vector_A)
-                Vector_Translate2 = Vector_Translate2.multiply(0.5)
-                Vector_Aprime = Vector_Aprime + Vector_Translate2
-                Vector_Bprime = Vector_Bprime + Vector_Translate2 
-            
-            Axis_User_Name, axis = plot_axis(Vector_Aprime, Vector_Bprime, part, name)
-
-            print_msg(str(Axis_User_Name) + result_msg )
+                Vector_Aprime = Vector_A + Vector_Translate
+                Vector_Bprime = Vector_B + Vector_Translate
+    
+                if str(m_attach_point) == "Start":
+                    Vector_Translate2 = (Vector_A - Vector_B)
+                    Vector_Translate2 = Vector_Translate2.multiply(0.5)
+                    Vector_Aprime = Vector_Aprime + Vector_Translate2
+                    Vector_Bprime = Vector_Bprime + Vector_Translate2   
+                if str(m_attach_point) == "End":
+                    Vector_Translate2 = (Vector_B - Vector_A)
+                    Vector_Translate2 = Vector_Translate2.multiply(0.5)
+                    Vector_Aprime = Vector_Aprime + Vector_Translate2
+                    Vector_Bprime = Vector_Bprime + Vector_Translate2 
+                               
+                Axis_User_Name, axis = plot_axis(Vector_Aprime, Vector_Bprime, part, name)
+    
+                print_msg(str(Axis_User_Name) + result_msg )
         else:
             printError_msg(error_msg) 
     except:
@@ -3555,42 +3782,58 @@ def plot_pointLineAxis():
 
 
 def plot_linePlaneAxis():
-    """ Plot an Axis on a Plane by projection from another Axis.
+    """ Axes=(Pl(s),Axes):
+        Create projection(s) of Axes onto Plane(s).
+        - First select one (or several) Line(s)
+        - Second select one or several) Plane(s)
     """
-    msg=0
+    msg=verbose
     createFolders('WorkAxis')
-    error_msg = "Unable to create projection Axis onto a Plane : \nSelect one Plane and one Line !"
+    error_msg = "Unable to create projection Axis onto a Plane : \n"+\
+                "Select at least one Line and one Plane !"
     result_msg = " : Projection Axis onto a Plane created !"
     name = "Line"
-    part = "Part::Feature"    
+    part = "Part::Feature"
+    
     Selection = get_SelectedObjects(info=msg, printError=False)
     try:
         SelectedObjects = Selection
         Number_of_Edges = SelectedObjects[1]
         Number_of_Planes = SelectedObjects[2]
-        #print_msg("Number_of_Edges=" + str(Number_of_Edges) + " Number_of_Planes=" + str(Number_of_Planes))
-        if Number_of_Planes == 1 and Number_of_Edges == 1:
+        if msg != 0:
+            print_msg(" Number_of_Edges=" + str(Number_of_Edges))
+            print_msg(" Number_of_Planes=" + str(Number_of_Planes))
+        if Number_of_Edges >= 1 and Number_of_Planes >= 1:           
             Edge_List = SelectedObjects[4]
             Plane_List = SelectedObjects[5]
-            Point_A = Edge_List[0].valueAt(0.0)
-            Point_B = Edge_List[0].valueAt(Edge_List[0].Length)
-            #print_point(Point_A, msg="Point_A : ")
-            #print_point(Point_B, msg="Point_B : ")
-            Selected_Plane = Plane_List[0]
-            Plane_Point = Selected_Plane.CenterOfMass
-            Plane_Normal = Selected_Plane.normalAt(0,0)
-            # Projection of A and B onto the Plane Aprime and Bprime
-            Vector_A = Point_A + Plane_Normal
-            Vector_B = Point_B + Plane_Normal
+                        
+            for Selected_Plane in Plane_List:
+                for Selected_Edge in Edge_List: 
+                    Point_A = Selected_Edge.Vertexes[0].Point
+                    Point_B = Selected_Edge.Vertexes[1].Point
+                    if msg != 0:
+                        print_point(Point_A, msg="Point_A : ")
+                        print_point(Point_B, msg="Point_B : ")
             
-            Point_Aprime = intersecLinePlane(Point_A, Vector_A, Plane_Normal, Plane_Point, info=0)
-            Point_Bprime = intersecLinePlane(Point_B, Vector_B, Plane_Normal, Plane_Point, info=0)
-            # Plot them
-            plot_point(Point_Aprime, part, "PointFacePoint")
-            plot_point(Point_Bprime, part, "PointFacePoint")
-            Axis_User_Name, axis = plot_axis(Point_Aprime, Point_Bprime, part, name)
+                    #Plane_Point = Selected_Plane.CenterOfMass
+                    Plane_Placement = Selected_Plane.Placement
+                    Plane_Normal = Selected_Plane.normalAt(0,0)
+                    # Projection of A and B onto the Plane Aprime and Bprime
+                    #Vector_A = Point_A + Plane_Normal
+                    #Vector_B = Point_B + Plane_Normal
             
-            print_msg(str(Axis_User_Name) + result_msg )
+                    #Point_Aprime = intersecLinePlane(Point_A, Vector_A, Plane_Normal, Plane_Point, info=0)
+                    #Point_Bprime = intersecLinePlane(Point_B, Vector_B, Plane_Normal, Plane_Point, info=0)
+                    Point_Aprime = Point_A.projectToPlane(Plane_Placement.Base, Plane_Normal)
+                    Point_Bprime = Point_B.projectToPlane(Plane_Placement.Base, Plane_Normal)
+                    
+                    if msg != 0:
+                        # Plot them
+                        plot_point(Point_Aprime, part, "PointFacePoint")
+                        plot_point(Point_Bprime, part, "PointFacePoint")
+                    Axis_User_Name, axis = plot_axis(Point_Aprime, Point_Bprime, part, name)
+            
+                    print_msg(str(Axis_User_Name) + result_msg )
         else: 
             printError_msg(error_msg) 
     except:
@@ -3825,7 +4068,7 @@ def distLine(value):
         if msg != 0:
             print_msg("New Distance between lines is :" + str(m_distLine))
     except ValueError:
-        printError_msg("Distance between plane must be valid number !")
+        printError_msg("Distance between lines must be valid number !")
 
   
 def plot_distLine():
@@ -3939,7 +4182,166 @@ def plot_distLine():
     except:
         printError_msg(error_msg)
 
+def numberLine2(value):
+    """ Respond to the change in number of line from the spin box.    
+    """
+    global verbose
+    msg=verbose
+        
+    try:
+        # First we check if a valid number have been entered
+        global m_numberLine2
+        if str(value) == '-':
+            return
+        m_numberLine2  = int(value)
+        if m_numberLine2 == 0:
+           m_numberLine2 = 1 
+        if msg != 0:
+            print_msg("New number is :" + str(m_numberLine2))
+    except ValueError:
+        printError_msg("Number must be valid !")
 
+
+def angleLine(value):
+    """ Respond to the change in Angle between line value from the text box.
+    """
+    global verbose
+    msg=verbose        
+    try:
+        # First we check if a valid number have been entered
+        global m_angleLine
+        m_angleLine  = float(value)
+        if msg != 0:
+            print_msg("New Angle between lines is :" + str(m_angleLine))
+    except ValueError:
+        printError_msg("Angle between lines must be valid number in degrees !")
+        
+        
+def plot_angleLine():
+    """ Axes=(Axis,Pt,Pl,a):
+        Create an Axis with an Angle to a origin Axis.
+        - First select an Axis to rotate, then a Plane and a rotation Point
+        or
+        - First select an Axis to rotate, then a rotation Axis and a rotation Point
+
+        NB:
+        The Axis is created by rotation using :
+          The Normal of the selected Plane as rotation Axis 
+        and selected Point as rotation Point. 
+        or
+          The second selected Axis as rotation Axis 
+        and selected Point as rotation Point. 
+        
+         - The angle (in degrees) of rotation can be defined first.
+        Positive number in one direction and negative in the other one.
+         - The second number indicates the number of Axes to create.
+    """
+    msg=verbose
+    createFolders('WorkAxis')
+    error_msg = "Unable to create Line(s) : \n "+\
+                "Select first one Line then one Point and one Plane! \n"+\
+                "or\n"+\
+                "Select first one Line then one Point and one second Axis!"
+    result_msg = " : Line(s) created !"
+    name = "Line_with_angle"
+    part = "Part::Feature"
+
+    Selection = get_SelectedObjects(info=msg, printError=False)
+    try:
+        SelectedObjects = Selection
+        Number_of_Points = SelectedObjects[0]
+        Number_of_Edges  = SelectedObjects[1]
+        Number_of_Planes = SelectedObjects[2]
+        if msg != 0:
+            print_msg("Number_of_Points=" + str(Number_of_Points) + \
+                      "\nNumber_of_Edges=" + str(Number_of_Edges) + \
+                      "\nNumber_of_Planes=" + str(Number_of_Planes))
+        
+        if (Number_of_Points == 1 ) and  (Number_of_Edges == 1) and (Number_of_Planes) == 1 :
+            Point_List = SelectedObjects[3]
+            Edge_List  = SelectedObjects[4]
+            Plane_List = SelectedObjects[5]
+            if msg !=0:
+                print_msg("Point List = " + str(Point_List)) 
+                print_msg("Edge List = " + str(Edge_List))
+                print_msg("Plane_List = " + str(Plane_List))
+            Vector_A = Edge_List[0].Vertexes[0].Point
+            Vector_B = Edge_List[0].Vertexes[-1].Point
+            m_Edge = Edge_List[0]
+            Vector_C = Point_List[0].Point
+            Plane_D = Plane_List[0]
+            if msg != 0:
+                print_point(Vector_A, msg="Vector_A : ")
+                print_point(Vector_B, msg="Vector_B : ")
+                print_point(Vector_C, msg="Vector_C : ")
+    
+            rot_center = Vector_C
+            rot_axis = Plane_D.normalAt(0,0)
+            rot_angle = m_angleLine
+            rot_copy = m_numberLine2
+            if msg != 0: 
+                print_msg("rot_center = " + str(rot_center))
+                print_msg("rot_axis = " + str(rot_axis))
+                print_msg("rot_angle = " + str(rot_angle))
+                print_msg("rot_copy = " + str(rot_copy)) 
+            for i in range(rot_copy):
+                m_Edge2 = m_Edge.copy()
+                # Apply the rotation (degree) to the current location of this shape
+                # Shp.rotate(Vector(0,0,0),Vector(0,0,1),180)
+                # rotate the shape around the Z Axis 180 degrees.
+                m_Edge2.rotate(rot_center,rot_axis,rot_angle)
+                Axis_E1 = m_Edge2.Vertexes[0].Point
+                Axis_E2 = m_Edge2.Vertexes[1].Point
+
+                Axis_User_Name, axis = plot_axis(Axis_E1, Axis_E2, part, name)
+                print_msg(str(Axis_User_Name) + result_msg )
+                rot_angle = rot_angle + m_angleLine
+                
+        elif (Number_of_Points == 1 ) and  (Number_of_Edges == 2) :
+            Point_List = SelectedObjects[3]
+            Edge_List  = SelectedObjects[4]
+            if msg !=0:
+                print_msg("Point List = " + str(Point_List)) 
+                print_msg("Edge List = " + str(Edge_List))
+            Vector_A = Edge_List[0].Vertexes[0].Point
+            Vector_B = Edge_List[0].Vertexes[-1].Point
+            m_Edge = Edge_List[0]
+            Vector_C = Point_List[0].Point
+
+            if msg != 0:
+                print_point(Vector_A, msg="Vector_A : ")
+                print_point(Vector_B, msg="Vector_B : ")
+                print_point(Vector_C, msg="Vector_C : ")
+    
+            rot_center = Vector_C
+            Point_A = Edge_List[1].Vertexes[0].Point
+            Point_B = Edge_List[1].Vertexes[-1].Point
+            rot_axis = Point_B.sub(Point_A)
+            rot_angle = m_angleLine
+            rot_copy = m_numberLine2
+            if msg != 0: 
+                print_msg("rot_center = " + str(rot_center))
+                print_msg("rot_axis = " + str(rot_axis))
+                print_msg("rot_angle = " + str(rot_angle))
+                print_msg("rot_copy = " + str(rot_copy)) 
+            for i in range(rot_copy):
+                m_Edge2 = m_Edge.copy()
+                # Apply the rotation (degree) to the current location of this shape
+                # Shp.rotate(Vector(0,0,0),Vector(0,0,1),180)
+                # rotate the shape around the Z Axis 180 degrees.
+                m_Edge2.rotate(rot_center,rot_axis,rot_angle)
+                Axis_E1 = m_Edge2.Vertexes[0].Point
+                Axis_E2 = m_Edge2.Vertexes[1].Point
+
+                Axis_User_Name, axis = plot_axis(Axis_E1, Axis_E2, part, name)
+                print_msg(str(Axis_User_Name) + result_msg )
+                rot_angle = rot_angle + m_angleLine
+
+        else: 
+            printError_msg(error_msg)         
+    except:
+        printError_msg(error_msg)
+        
       
 def plot_baseObjectAxes():
     msg=0
@@ -4459,8 +4861,8 @@ def plot_3pointsEllipse():
             printError_msg(error_msg)      
     except:
         printError_msg(error_msg)
+
     
-  
 def plot_3PointsPlane():
     """ Create a Plane from 3 Points.
     """
@@ -4649,6 +5051,7 @@ def plot_planePointPlane():
         SelectedObjects = Selection
         Number_of_Points = SelectedObjects[0]
         Number_of_Planes = SelectedObjects[2]
+        
         #print_msg("Number_of_Points=" + str(Number_of_Points) + " Number_of_Planes=" + str(Number_of_Planes))
         if Number_of_Points == 1 and Number_of_Planes == 1:
             Points_List = SelectedObjects[3]
@@ -5019,35 +5422,37 @@ def plot_clickForPlane2():
     If no object is selected, the plane is created to 0, 0, 0 coordinates with 
     a radius of 20 mm
     """
-    global verbose
     msg=verbose
+    createFolders('WorkPlanes')
 
     m_actDoc = get_ActiveDocument(info=msg)
     if m_actDoc == None:
         return None
-    createFolders('WorkPlanes')
-        
-    printError_msg(error_msg)
-    return    
     m_radius = 20
     m_selEx = Gui.Selection.getSelectionEx(m_actDoc.Name)
     m_objs = [selobj.Object for selobj in m_selEx]
-    if len(objs) >= 1:
-        s = m_objs[0].Shape
-        boundBox_ = s.BoundBox
-        boundBoxLX = boundBox_.XLength
-        boundBoxLY = boundBox_.YLength
-        boundBoxLZ = boundBox_.ZLength
-
-        m_radius = boundBoxLX
-        if m_radius < boundBoxLY:
-            m_radius = boundBoxLY
-        elif m_radius < boundBoxLZ:
-            m_radius = boundBoxLZ
-            
-    m_radiusP = m_radius
+    
+    for m_obj in m_objs:
+        if hasattr(m_obj, 'Shape'):
+            s = m_obj.Shape
+            m_bbox = s.BoundBox
+            m_radius = m_bbox.XLength
+            if m_radius < m_bbox.YLength:
+                m_radius = m_bbox.YLength
+            elif m_radius < m_bbox.ZLength:
+                m_radius = m_bbox.ZLength
+                
     if msg !=0:
-        print_msg("Create plane ("+str(m_radiusP)+" mm)")
+        print_msg("Create plane ("+str(m_radius)+" mm)")
+        
+    pl = FreeCAD.Placement()
+    pl.Rotation = Gui.ActiveDocument.ActiveView.getCameraOrientation()
+
+    
+    printError_msg(error_msg)
+    return    
+
+
     
     # TODO to complete    
     FcPlane = doc.addObject("App::DocumentObjectGroup","FcPlane")
@@ -5529,7 +5934,468 @@ def plot_axisPointCube():
         else:
             printError_msg(error_msg)
     except:
-        printError_msg(error_msg)    
+        printError_msg(error_msg)
+        
+        
+def diameterSphere(value):
+    """ Respond to the change in diameter value from the text box.
+    """        
+    try:
+        # First we check if a valid number have been entered
+        global m_diameterSphere
+        if str(value) == '-':
+            return
+        m_diameterSphere = float(value)
+        print_msg("New diameter is :" + str(m_diameterSphere))
+    except ValueError:
+        printError_msg("Diameter must be valid number !")
+              
+        
+def plot_centerSphere():
+    """ Plot a a Sphere shell:
+        - First select one or several Center Point(s). 
+        - Define Diameter if needed.
+        It will create Sphere shell(s) centered
+        at the selected point(s).
+    """
+    msg=verbose
+    createFolders('WorkObjects')
+
+    error_msg =\
+    "Unable to create a Sphere : \n" +\
+    "Select one (or several) point(s) first for the center location !\n"+\
+    "No selection means the center will be at (0,0,0) !"
+    result_msg = " : Sphere created !"
+    name = "Sphere"
+    part = "Part::Feature"
+    
+    m_actDoc = get_ActiveDocument(info=msg)
+    if m_actDoc.Name == None:
+        return None    
+        
+    try:
+        Point_List = []
+
+        Selection = get_SelectedObjects(info=msg, printError=False)
+        if Selection == None:
+            if msg != 0:
+                print_msg("Append Origin as Center !")
+            #Origin = Base.Vector(0, 0, 0)
+            #Point_List.append(Part.Vertex(Origin).Point)
+            Point_List.append(Base.Vector(0, 0, 0))
+            Number_of_Points = 1
+        else:
+            SelectedObjects = Selection
+            Number_of_Points = SelectedObjects[0]
+            if (SelectedObjects[0] >= 1) :
+                for m_point in SelectedObjects[3]:
+                    Point_List.append(m_point.Point) 
+        if msg != 0:
+            print_msg("Number_of_Points=" + str(Number_of_Points))
+            print_msg("Point_List=" + str(Point_List))
+
+        radius =  m_diameterSphere/2.
+        if msg != 0:
+            print_msg("Radius is : " + str(radius))
+        for center in Point_List:
+            if msg != 0:
+                print_point(center, msg="Center : ")
+            sphere_User_Name, sphere = plot_sphere(radius, center, part, name, grp="WorkObjects")                
+            print_point(center,str(sphere_User_Name) + result_msg + " at :")    
+        m_actDoc.recompute()
+    except:
+        printError_msg(error_msg)        
+
+
+def diameterDome(value):
+    """ Respond to the change in diameter value from the text box.
+    """        
+    try:
+        # First we check if a valid number have been entered
+        global m_diameterDome
+        if str(value) == '-':
+            return
+        m_diameterDome = float(value)
+        print_msg("New diameter is :" + str(m_diameterDome))
+    except ValueError:
+        printError_msg("Diameter must be valid number !")
+
+
+def frequencyDome(value):
+    """ Respond to the change in frequency value from the text box.
+    """        
+    try:
+        # First we check if a valid number have been entered
+        global m_frequencyDome
+        if str(value) == '-':
+            return
+        m_frequencyDome = int(value)
+        if m_frequencyDome in range(10):
+            print_msg("New frequency is :" + str(m_frequencyDome))
+        else:
+            return
+    except ValueError:
+        printError_msg("Frequency must be valid number !")
+        
+
+def makeDome(point, radius, frequency):
+    """
+    """ 
+    msg=verbose
+
+    m_center = point
+    m_radius = radius
+    m_frequency = frequency
+
+    if msg != 0:
+        print_msg("makeDome(point=" + str(m_center) +\
+                  ", radius="+ str(m_radius) +\
+                  ", frequency="+ str(m_frequency) +")")
+    
+    def makeFreqFaces(radius, center, f_Pt, s_Pt, th_Pt, freq):
+        """Makes the geodesic dome faces out of the points of an
+        icosahedron triangle
+        """
+        msg=verbose
+
+        m_radius = radius
+        m_center = center
+        m_freq = freq
+        m_domeFaces = []
+        firstEdge = None
+        secEdge = None
+        thirdEdge = None   
+
+        if msg != 0:
+            print_msg("m_radius =" + str(m_radius))
+            print_msg("m_center =" + str(m_center))
+            print_msg("m_freq =" + str(m_freq))
+        
+        # Definition of direction vectors
+        growVec = s_Pt.sub(f_Pt)
+        growVec.multiply(1.0/m_freq)
+        
+        crossVec = th_Pt.sub(s_Pt)
+        crossVec.multiply(1.0/m_freq)
+        
+        if msg == 2:
+            print_point(f_Pt, msg="f_Pt ")
+            plot_point(f_Pt, "Part::Feature", "f_Pt", grp="WorkPoints")
+            print_point(s_Pt, msg="s_Pt ")
+            plot_point(s_Pt, "Part::Feature", "s_Pt", grp="WorkPoints")
+            print_point(th_Pt, msg="th_Pt ")
+            plot_point(th_Pt, "Part::Feature", "th_Pt", grp="WorkPoints")
+        if msg == 3:    
+            print_point(growVec, msg="growVec ")
+            plot_point(growVec, "Part::Feature", "growVec", grp="WorkPoints")
+            print_point(crossVec, msg="crossVec ")
+            plot_point(crossVec, "Part::Feature", "crossVec", grp="WorkPoints")
+            
+        for k in range(m_freq):
+            print_msg("k = " + str(k))
+            kThirdPt = f_Pt + growVec * (k+0.0)
+            dThirdPt = kThirdPt.sub(m_center)
+            dThirdPt = dThirdPt.normalize().multiply(m_radius).add(m_center)
+            kSecPt = f_Pt + growVec * (k+1.0)
+            dSecPt = kSecPt.sub(m_center)
+            dSecPt = dSecPt.normalize().multiply(m_radius).add(m_center)
+            if msg == 2:
+                print_point(kThirdPt, msg="kThirdPt ")
+                plot_point(kThirdPt, "Part::Feature", "kThirdPt", grp="WorkPoints")
+                print_point(dThirdPt, msg="dThirdPt ")
+                plot_point(dThirdPt, "Part::Feature", "dThirdPt", grp="WorkPoints")
+                print_point(kSecPt, msg="kSecPt ")
+                plot_point(kSecPt, "Part::Feature", "kSecPt", grp="WorkPoints")
+                print_point(dSecPt, msg="dSecPt ")
+                plot_point(dSecPt, "Part::Feature", "dSecPt", grp="WorkPoints")
+                                                
+            for l in range(k+1):
+                print_msg("l = " + str(l))
+                
+                firstPt = kSecPt + crossVec *(l + 1.0)
+                dFirstPt = firstPt.sub(m_center)
+                dFirstPt = dFirstPt.normalize().multiply(m_radius).add(m_center) 
+                    
+                secPt = kSecPt + crossVec *(l + 0.0)
+                dSecPt = secPt.sub(m_center)
+                dSecPt = dSecPt.normalize().multiply(m_radius).add(m_center) 
+                                        
+                thirdPt = kThirdPt + crossVec *(l + 0.0)
+                dThirdPt = thirdPt.sub(m_center)
+                dThirdPt = dThirdPt.normalize().multiply(m_radius).add(m_center) 
+                if msg == 2:
+                    print_point(dFirstPt, msg="dFirstPt ")
+                    plot_point(dFirstPt, "Part::Feature", "dFirstPt", grp="WorkPoints")
+                    print_point(dSecPt, msg="dSecPt ")
+                    plot_point(dSecPt, "Part::Feature", "dSecPt", grp="WorkPoints")               
+                    print_point(dThirdPt, msg="dThirdPt ")
+                    plot_point(dThirdPt, "Part::Feature", "dThirdPt", grp="WorkPoints")
+                
+          
+                thirdEdge = Part.makeLine(dSecPt, dThirdPt)
+                if msg != 0:
+                    print_msg("thirdEdge =" + str(thirdEdge))
+                
+                if l > 0:
+                    secEdge = Part.makeLine(doThirdPt,dThirdPt)
+                    if msg == 2:
+                        print_msg("firstEdge =" + str(firstEdge))
+                        Part.show(firstEdge)
+                        print_msg("secEdge =" + str(secEdge))
+                        Part.show(secEdge)
+                        print_msg("thirdEdge =" + str(thirdEdge))
+                        Part.show(thirdEdge)
+                        
+                    triWire = Part.Wire([firstEdge, secEdge, thirdEdge])
+                    triFace = Part.Face(triWire)
+                    if msg == 2:
+                        print_msg("triWire =" + str(triWire))
+                        print_msg("triWire.isClosed() =" + str(triWire.isClosed()))
+                        print_msg("triFace =" + str(triFace)) 
+                    m_domeFaces.append(triFace)
+                
+                othirdPt = kThirdPt + crossVec *(l + 0.0)
+                doThirdPt = othirdPt.sub(m_center)
+                doThirdPt = doThirdPt.normalize().multiply(m_radius).add(m_center)
+                if msg == 2:               
+                    print_point(doThirdPt, msg="doThirdPt ")
+                    plot_point(doThirdPt, "Part::Feature", "doThirdPt", grp="WorkPoints")
+                
+                firstEdge = Part.makeLine(dThirdPt,dFirstPt)                    
+                secEdge = Part.makeLine(dFirstPt,dSecPt)
+                thirdEdge = Part.makeLine(dSecPt, dThirdPt)
+                if msg == 2:
+                    print_msg("firstEdge =" + str(firstEdge))
+                    Part.show(firstEdge)
+                    print_msg("secEdge =" + str(secEdge))
+                    Part.show(secEdge)
+                    print_msg("thirdEdge =" + str(thirdEdge))
+                    Part.show(thirdEdge)
+                    
+                triWire = Part.Wire([firstEdge, secEdge, thirdEdge])                    
+                triFace = Part.Face(triWire)
+                if msg == 2:
+                    print_msg("triWire =" + str(triWire))
+                    print_msg("triWire.isClosed() =" + str(triWire.isClosed()))
+                    print_msg("triFace =" + str(triFace))                
+                m_domeFaces.append(triFace)
+                    
+                if msg == 3:
+                    Part.show(firstEdge)
+                    Part.show(secEdge)
+                    Part.show(thirdEdge)
+                    Part.show(triFace) 
+
+        return m_domeFaces
+
+    
+    # Strutlength of underlying icosahedron:
+    m_length = (4.0*m_radius)/math.sqrt(2.0*math.sqrt(5.0)+10.0)
+   
+    # Angle of vertices of icosahedron points
+    # not a north or south pole
+    m_icoAngle = math.atan(0.5)
+
+    if msg != 0:
+        print_msg("m_length =" + str(m_length))
+        print_msg("m_icoAngle =" + str(m_icoAngle))
+
+    m_icoLat = m_radius * math.sin(m_icoAngle)
+    m_latRad = m_radius * math.cos(m_icoAngle)
+    m_ang36 = math.radians(36.0)
+    if msg != 0:
+        print_msg("m_icoLat =" + str(m_icoLat))
+        print_msg("m_latRad =" + str(m_latRad))
+        print_msg("m_ang36 =" + str(m_ang36)) 
+    
+    # Calculation all points of the icosahedron
+    m_icoPts = []
+    m_new_icoPts = []
+    m_icoPts.append(Base.Vector(0.0, 0.0, m_radius))
+    for i in range(10):
+      m_icoCos = m_latRad * math.cos(i*m_ang36)
+      m_icoSin = m_latRad * math.sin(i*m_ang36)
+      if i%2 == 0:
+        m_icoPts.append(Base.Vector(m_icoSin, m_icoCos, m_icoLat))
+      else:
+        m_icoPts.append(Base.Vector(m_icoSin, m_icoCos, -1 * m_icoLat))
+
+    m_icoPts.append(Base.Vector(0.0, 0.0, -1 * m_radius))
+    if msg != 0:
+        print_msg("m_icoPts =" + str(m_icoPts))
+        
+    for m_icoPt in m_icoPts:
+        #print_point(m_icoPt, msg="icoPt")
+        #plot_point(m_icoPt, "Part::Feature", "icoPt", grp="WorkPoints")
+        m_new_icoPt = m_icoPt.add(m_center)
+        #if msg != 0:
+            #plot_point(m_new_icoPt, "Part::Feature", "new_icoPt", grp="WorkPoints")
+        m_new_icoPts.append(m_new_icoPt) 
+    
+    m_icoPts = m_new_icoPts
+    
+    # Making the faces of the icosahedron    
+    # Collects faces of the underlying icosahedron   
+    m_icoFaces = []
+    # Collects the faces of the geodesic dome 
+    m_domeFaces = [] 
+    
+    secPt = m_icoPts[0]
+    thirdPt = m_icoPts[9]
+    thirdEdge = Part.makeLine(secPt,thirdPt)
+    # Top Part
+    for i in range(5):
+        j = i*2+1
+        firstPt = m_icoPts[j]        
+        firstEdge = Part.makeLine(thirdPt,firstPt)
+        secEdge = Part.makeLine(firstPt,secPt)
+        triWire = Part.Wire([firstEdge, secEdge, thirdEdge])
+        triFace = Part.Face(triWire)
+        m_icoFaces.append(triFace)
+        #if msg != 0:
+        #    Part.show(triFace)
+        if m_frequency != 1:  
+            m_faces = makeFreqFaces(m_radius, m_center, firstPt, secPt, thirdPt, m_frequency)
+            for m_face in m_faces:
+                m_domeFaces.append(m_face)
+                        
+        thirdPt = m_icoPts[j]
+        thirdEdge = Part.makeLine(secPt,thirdPt)
+            
+    secPt = m_icoPts[10]
+    thirdPt = m_icoPts[9]   
+    thirdEdge = Part.makeLine(secPt,thirdPt)
+    # Middle part        
+    for i in range(10):
+        j = i+1
+        firstPt = m_icoPts[j] 
+        firstEdge = Part.makeLine(thirdPt,firstPt)
+        secEdge = Part.makeLine(firstPt,secPt)
+        triWire = Part.Wire([firstEdge, secEdge, thirdEdge])
+        triFace = Part.Face(triWire)
+        m_icoFaces.append(triFace)
+        #if msg != 0:
+        #    Part.show(triFace)
+        if m_frequency != 1:
+            m_faces = makeFreqFaces(m_radius, m_center, firstPt, secPt, thirdPt, m_frequency)   
+            for m_face in m_faces:
+                m_domeFaces.append(m_face)
+                
+        thirdPt = secPt  
+        secPt = m_icoPts[j]  
+        thirdEdge = Part.makeLine(secPt,thirdPt)
+    
+    secPt = m_icoPts[11]    
+    thirdPt = m_icoPts[10]
+    thirdEdge = Part.makeLine(secPt,thirdPt)
+    # Bottom part
+    for i in range(5):
+        j = i*2+2
+        firstPt = m_icoPts[j] 
+        firstEdge = Part.makeLine(thirdPt,firstPt)
+        secEdge = Part.makeLine(firstPt,secPt)
+        triWire = Part.Wire([firstEdge, secEdge, thirdEdge])
+        triFace = Part.Face(triWire)
+        m_icoFaces.append(triFace)
+        #if msg != 0:
+        #    Part.show(triFace)
+        if m_frequency != 1:
+            m_faces = makeFreqFaces(m_radius, m_center, firstPt, secPt, thirdPt, m_frequency)     
+            for m_face in m_faces:
+                m_domeFaces.append(m_face)
+                
+        thirdPt = m_icoPts[j]
+        thirdEdge = Part.makeLine(secPt,thirdPt)
+            
+    # Shell of a corresponding icosahedron  
+    m_icosahedron_Shell = Part.Shell(m_icoFaces)
+    # if msg != 0:
+        # Part.show(m_icosahedron_Shell)
+    
+    if m_frequency != 1:    
+        # Shell of the geodesic dome
+        m_domeShell = Part.Shell(m_domeFaces)
+        # if msg != 0:
+            # Part.show(m_domeShell)
+    else:
+        m_domeShell = None
+        
+    return m_domeShell, m_icosahedron_Shell
+      
+  
+def plot_centerDome():
+    """ Plot a full geodesic dome shell.
+    X-Y-symmetry plane
+    for even frequencies
+    Select first a point for the center of the dome.
+    
+    You migth defined first the 2 parameters of the dome:
+        Dome Diameter
+        Frequency Parameter (Integer between 1 to 10)
+    If Frequency Parameter = 1, the code create an icosahedron. 
+    An icosahedron is a polyhedron with 20 faces.
+    Original code from : Ulrich Brammer
+    """
+    msg=verbose
+    createFolders('WorkObjects')
+
+    error_msg =\
+    "Unable to create a Dome : \n" +\
+    "Select one (or several) point(s) first for the center location !\n"+\
+    "No selection means the center will be at (0,0,0) !"
+    result_msg = " : Dome created !"
+    name = "Dome"
+    part = "Part::Feature"
+    Pt_List = []
+
+    m_actDoc = get_ActiveDocument(info=msg)
+    if m_actDoc.Name == None:
+        return None    
+    
+    Selection = get_SelectedObjects(info=msg, printError=False)    
+   
+    if Selection == None:
+        if msg != 0:
+            print_msg("Append Origin as Center !")
+        #Origin = Base.Vector(0, 0, 0)
+        #Pt_List.append(Part.Vertex(Origin).Point)
+        Pt_List.append(Base.Vector(0, 0, 0))
+        Number_of_Points = 1
+    else:
+        SelectedObjects = Selection
+        Number_of_Points = SelectedObjects[0]
+        if (SelectedObjects[0] >= 1) :
+            for m_point in SelectedObjects[3]:
+                Pt_List.append(m_point.Point)
+        else:
+            printError_msg(error_msg)
+            return
+       
+    try:                
+        if msg != 0:
+            print_msg("Number_of_Points=" + str(Number_of_Points))
+            print_msg("Point_List=" + str(Pt_List))
+
+        frequency = int(m_frequencyDome)
+        radius =  m_diameterDome/2.
+        if msg != 0:
+            print_msg("Radius is : " + str(radius))
+            print_msg("Frequency is : " + str(frequency))
+            
+        for center in Pt_List:
+            if msg != 0:
+                print_point(center, msg="Center : ")
+                #Sphere with radius of geodesic dome for debugging purposes
+                sphere_User_Name, sphere = plot_sphere(radius, center, part, "Sphere", grp="WorkObjects")
+
+            dome_User_Name, dome = plot_Dome(center, radius, frequency, part, name, grp="WorkObjects")
+                
+            print_point(center,str(dome_User_Name) + result_msg + " at :")    
+        m_actDoc.recompute()
+        del Pt_List[:]
+    except:
+        printError_msg(error_msg)
+
 
 def view_align():
     """ Set the current view perpendicular to the selected Face, Edge
@@ -6513,39 +7379,467 @@ def object_clearance():
     except:
         printError_msg(error_msg)    
 
+
+def object_angle():
+    """
+    Check for two Edges/Planes angle:
+    Angle measurement between two Edges, two Planes
+    or One Edge and One Plane
+
+    NB:
+    Normals of Planes will be used.
+    """
+    msg=verbose
+            
+    error_msg =\
+    "INCORRECT Object(s) Selection :\n" +\
+    "You Must Select Two(2) Edges !\n"+\
+    "Or Two(2) Planes !\n"+\
+    "Or One Edge and One Plane !"
+   
+    Selection = get_SelectedObjects(info=msg, printError=False)
+    try:
+        SelectedObjects = Selection
+        Number_of_Edges  = SelectedObjects[1]
+        Number_of_Planes = SelectedObjects[2]
+        if msg!=0:
+            print_msg("Number_of_Edges=" + str(Number_of_Edges))
+            print_msg("Number_of_Planes=" + str(Number_of_Planes))
+
+        if Number_of_Edges == 2:
+            Edge_List = SelectedObjects[4]    
+            if msg != 0:
+                print_msg(" Edge_List=" + str(Edge_List))
+            m_angle, m_angle_rad = angleBetween(Edge_List[0],Edge_List[1])
+            result = "Between 2 Edges :\n"+\
+            "Angle is :\n" + str(m_angle) + " deg\n" + str(m_angle_rad) + " rad\n"
+            print_gui_msg(result)
+            
+        elif Number_of_Planes == 2 :
+            Plane_List = SelectedObjects[5]
+            if msg != 0:
+                print_msg(" Plane_List=" + str(Plane_List))
+                
+            Normal1 = Plane_List[0].normalAt(0,0)
+            Normal2 = Plane_List[1].normalAt(0,0)
+            if msg != 0:
+                print_point(Normal1, msg="Normal1 : ")
+                print_point(Normal2, msg="Normal2 : ")
+                        
+            m_angle, m_angle_rad = angleBetween(Normal1,Normal2)
+            result = "Between 2 Planes :\n"+\
+            "Angle is :\n" + str(m_angle) + " deg\n" + str(m_angle_rad) + " rad\n"
+            print_gui_msg(result)
+            
+        elif Number_of_Planes == 1 and Number_of_Edges == 1:
+            Edge_List  = SelectedObjects[4] 
+            Plane_List = SelectedObjects[5]
+            if msg != 0:
+                print_msg(" Edge_List =" + str(Edge_List))
+                print_msg(" Plane_List=" + str(Plane_List))
+                
+            Normal1 = Plane_List[0].normalAt(0,0)
+                        
+            m_angle, m_angle_rad = angleBetween(Edge_List[0],Normal1)
+            result = "Between One Edge and One Plane :\n"+\
+            "Angle is :\n" + str(m_angle) + " deg\n" + str(m_angle_rad) + " rad\n"
+            print_gui_msg(result) 
+        else:
+            printError_msg(error_msg)
+       
+    except:
+        printError_msg(error_msg)
+        
+        
+def points_distance():
+    """
+    Check for two Points distance:
+        Distances measurement and Delta values (on main Axes) between two Points
+
+    Original code from Mario52
+    """
+    msg=verbose
+            
+    error_msg = "INCORRECT Object(s) Selection :\n\nYou Must Select Two(2) Points !"
+    
+    Selection = get_SelectedObjects(info=msg, printError=False)
+    try:
+        SelectedObjects = Selection
+        Number_of_Points = SelectedObjects[0]
+        if msg!=0:
+            print_msg("Number_of_Points=" + str(Number_of_Points))
+
+        if Number_of_Points != 2:
+            printError_msg(error_msg)
+            return
+        
+        Point_List = SelectedObjects[3]
+
+        pos_X1 = Point_List[0].Point.x
+        pos_Y1 = Point_List[0].Point.y
+        pos_Z1 = Point_List[0].Point.z
+        if msg!=0:
+            print_point(Point_List[0].Point, msg="First Point : ")
+
+        pos_X2 = Point_List[1].Point.x
+        pos_Y2 = Point_List[1].Point.y
+        pos_Z2 = Point_List[1].Point.z
+        if msg!=0:
+            print_point(Point_List[1].Point, msg="Last Point : ")     
+        
+        m_dist = distanceBetween(Point_List[0].Point,Point_List[1].Point)
+        if msg!=0:
+            print_msg("Distance is : " + str(m_dist))
+            
+        msg=\
+        "Begin : X1 "+str(pos_X1)+" Y1: "+str(pos_Y1)+" Z1: "+str(pos_Z1)+"\n\n" +\
+        "End : X2 "+str(pos_X2)+" Y2: "+str(pos_Y2)+" Z2: "+str(pos_Z2)+"\n\n" +\
+        "Delta X : "+str(abs(pos_X1-pos_X2))+"\n" +\
+        "Delta Y : "+str(abs(pos_Y1-pos_Y2))+"\n" +\
+        "Delta Z : "+str(abs(pos_Z1-pos_Z2))+"\n\n" +\
+        "Distance : " + str(m_dist)        
+
+        print_gui_msg(msg)
+    except:
+        printError_msg(error_msg)        
+
+
+def camera_orientation():
+    """ Detect the position of the camera.
+    The returned value is the value provided 
+    by the function getCameraOrientation().
+    """
+    msg=verbose
+    pl = FreeCAD.Placement()
+    pl.Rotation = Gui.ActiveDocument.ActiveView.getCameraOrientation()
+    
+    xP = pl.Rotation.Q[0]
+    yP = pl.Rotation.Q[1]
+    zP = pl.Rotation.Q[2]
+    qP = pl.Rotation.Q[3]
+    
+    msg=\
+    "___Camera_Orientation____________________"+"\n" +\
+    "Radians XYZ Q  : " + str(pl.Rotation.Q)+"\n" +\
+    "Degrees XYZ    : " + str(math.degrees(xP)) + " , " +str(math.degrees(yP)) + " , " + str(math.degrees(zP)) +"\n" +\
+    "Degrees Q      : " + str(math.degrees(qP)) +"\n"+\
+    "Radians Axis.xyz A : " + str(pl.Rotation.Axis) + " , " + str(pl.Rotation.Angle) +"\n"+\
+    "Degrees Axis.x : " + str(math.degrees(pl.Rotation.Axis.x)) +"\n"+\
+    "Degrees Axis.y : " + str(math.degrees(pl.Rotation.Axis.y)) +"\n"+\
+    "Degrees Axis.z : " + str(math.degrees(pl.Rotation.Axis.z)) +"\n"+\
+    "Degrees Angle  : " + str(math.degrees(pl.Rotation.Angle))
+    
+    print_gui_msg(msg)
+    
         
 def object_align2view():
-    """ Place your object selected to the position ActiveView (camera)
-    __author__ = "Mario52"
     """
-    # revoir le point de rotation
-    msg=0
-    error_msg  = "Select one object !"
+    Align the face of selected object(s)  to the actual view Plane.
+    - Click first to select a Face of one or several objects.
+
+    NB:
+      The center of rotation is the center of the bounbing box if possible or 
+      the center of the Face.
+     
+      if the Face of the object selected is already aligned to the  view Plane,
+      a rotation of 180 deg is applied to the object.
+      In this case the Axis of rotation is Z vector : Base.Vector(0, 0, 1)
+    """
+    msg=verbose
+
+    error_msg =\
+    "INCORRECT Object(s) Selection :\n" +\
+    "You Must Select at least one Face of one Object !\n" +\
+    "All Face(s) will be aligned to the actual view Plane!"
+        
+    Selection = get_SelectedObjectsWithParent(info=msg, printError=False)
+    try:
+        SelectedObjects = Selection
+        Number_of_Planes = SelectedObjects[2]
+        if msg!=0:
+            print_msg("Number_of_Planes=" + str(Number_of_Planes))
+        if Number_of_Planes >= 1 :
+            Plane_List = SelectedObjects[5]
+            if msg != 0:
+                print_msg(" Plane_List=" + str(Plane_List))
+                
+            Origin = Base.Vector(0, 0, 0)
+                
+            Plane_Normal_ref = Gui.ActiveDocument.ActiveView.getViewDirection()
+            if msg != 0:
+                print_point(Plane_Normal_ref, msg="Reference Plane_Normal = ")
+                
+            for Selected_Plane_dict in Plane_List:
+                if msg != 0:
+                    print_msg("Selected_Plane_dict = " + str(Selected_Plane_dict))
+                for Selected_Plane, Parent_Plane in Selected_Plane_dict.iteritems():
+                    if msg != 0:
+                        print_msg("Selected_Plane = " + str(Selected_Plane))
+                        print_msg("Parent = " + str(Parent_Plane))
+                    try:                        
+                        Plane_Point = Parent_Plane.Shape.BoundBox.Center
+                    except:
+                        Plane_Point = Selected_Plane.CenterOfMass
+                        
+                    Plane_Normal = Selected_Plane.normalAt(0,0)
+                    if msg != 0:
+                        print_point(Plane_Point, msg="Plane_Point = ")
+                        print_point(Plane_Normal, msg="Plane_Normal = ")
+                    if colinearVectors(Plane_Normal, Origin, Plane_Normal_ref, info=0, tolerance=1e-12):
+                        rot_axis = Base.Vector(0, 0, 1).cross(Plane_Normal)
+                        rot_center = Plane_Point
+                        rot_angle = 180.
+                        Draft.rotate(Parent_Plane,rot_angle,rot_center,rot_axis)
+                    else:
+                        m_angle, m_angle_rad = angleBetween(Plane_Normal,Plane_Normal_ref)
+                        rot_axis = Plane_Normal.cross(Plane_Normal_ref)
+                        rot_center = Plane_Point
+                        rot_angle = m_angle
+                        Draft.rotate(Parent_Plane,rot_angle,rot_center,rot_axis)
+        else:
+            printError_msg(error_msg)            
+    except:
+        printError_msg(error_msg)
+
+
+def angleAlignFaces(value):
+    """ Respond to the change in angle value from the text box.
+    """        
+    try:
+        # First we check if a valid number have been entered
+        global m_angleAlignFaces
+        if str(value) == '-':
+            return
+        m_angleAlignFaces  = float(value)
+        print_msg("New angle in degrees is :" + str(m_angleAlignFaces))
+    except ValueError:
+        printError_msg("Angle must be valid number !")
+        
+        
+def object_alignFaces():
+    """
+    Align the Face(s) from selected object(s) to the last Face selected.
+     - Click first to select a Face of an object or several Faces from several objects. 
+     - Click second to select a Face to align to.
     
-    m_actDoc = get_ActiveDocument(info=msg)
-    if m_actDoc == None:
-        return None
+    NB:
+      The center of rotation is the center of the bounbing box if possible or 
+      the center of the Face.
+     
+      if the Face of the object selected is already aligned to the last one,
+      a rotation of 180 deg is applied to the object.
+      In this case the Axis of rotation is Z vector : Base.Vector(0, 0, 1)
+    """
+    msg=verbose
         
-    m_num, m_selEx, m_objs, m_objNames = get_InfoObjects(info=msg)
-    Center = centerObjectsPoint(m_objs)
-    if Center != None:
-        pl = FreeCAD.Placement()
-        pl.Rotation = Gui.ActiveDocument.ActiveView.getCameraOrientation()
-        pl.Base = App.Vector(0,0,0)
-        for m_objName in m_objNames:           
-            App.ActiveDocument.getObject(m_objName).Placement=pl
+    error_msg =\
+    "INCORRECT Object(s) Selection :\n" +\
+    "You Must Select at least two(2) Faces (from two objects) !\n" +\
+    "All Faces will be aligned to the last one !"
+    
+    Selection = get_SelectedObjectsWithParent(info=msg, printError=False)
+    
+    try:
+        SelectedObjects = Selection
+        Number_of_Planes = SelectedObjects[2]
+        if msg!=0:
+            print_msg("Number_of_Planes=" + str(Number_of_Planes))
+            
+        if Number_of_Planes >= 2 :
+            Plane_List = SelectedObjects[5]
+            if msg != 0:
+                print_msg(" Plane_List=" + str(Plane_List))
+            
+            Origin = Base.Vector(0, 0, 0)
+            # Get the Reference Plane : last of the selected
+            Ref_Plane_dict = Plane_List[-1]
+            for Selected_Plane, Parent_Plane in Ref_Plane_dict.iteritems():
+                Plane_Point_ref = Selected_Plane.CenterOfMass
+                Plane_Normal_ref = Selected_Plane.normalAt(0,0)
+            if msg != 0:
+                print_point(Plane_Point_ref, msg="Reference Plane_Point = ")
+                print_point(Plane_Normal_ref, msg="Reference Plane_Normal = ")
+            del Plane_List[-1]
+                        
+            for Selected_Plane_dict in Plane_List:
+                if msg != 0:
+                    print_msg("Selected_Plane_dict = " + str(Selected_Plane_dict))
+                for Selected_Plane, Parent_Plane in Selected_Plane_dict.iteritems():
+                    if msg != 0:
+                        print_msg("Selected_Plane = " + str(Selected_Plane))
+                        print_msg("Parent = " + str(Parent_Plane))
+                    try:                        
+                        Plane_Point = Parent_Plane.Shape.BoundBox.Center
+                    except:
+                        Plane_Point = Selected_Plane.CenterOfMass
+
+                    Plane_Normal = Selected_Plane.normalAt(0,0)
+                    if msg != 0:
+                        print_point(Plane_Point, msg="Plane_Point = ")
+                        print_point(Plane_Normal, msg="Plane_Normal = ")
+                    
+                    if colinearVectors(Plane_Normal, Origin, Plane_Normal_ref, info=0, tolerance=1e-12):
+                        rot_axis = Base.Vector(0, 0, 1).cross(Plane_Normal)
+                        rot_center = Plane_Point
+                        rot_angle = 180. + m_angleAlignFaces
+                        Draft.rotate(Parent_Plane,rot_angle,rot_center,rot_axis)
+                    else:
+                        m_angle, m_angle_rad = angleBetween(Plane_Normal,Plane_Normal_ref)
+                        rot_axis = Plane_Normal.cross(Plane_Normal_ref)
+                        rot_center = Plane_Point
+                        rot_angle = m_angle + m_angleAlignFaces
+                        Draft.rotate(Parent_Plane,rot_angle,rot_center,rot_axis)
+        else:
+            printError_msg(error_msg)                          
+    except:
+        printError_msg(error_msg)
+
+
+def angleAlignEdges(value):
+    """ Respond to the change in angle value from the text box.
+    """        
+    try:
+        # First we check if a valid number have been entered
+        global m_angleAlignEdges
+        if str(value) == '-':
+            return
+        m_angleAlignEdges  = float(value)
+        print_msg("New angle in degrees is :" + str(m_angleAlignEdges))
+    except ValueError:
+        printError_msg("Angle must be valid number !")
+
+
+def object_alignEdges():
+    """ 
+    Align the Edge(s) from selected object(s) to the last Edge selected.
+    - Click first to select an Edge of an object or several Edges from several objects. 
+    - Click second to select an Edge to align to.
+
+    NB:
+      The center of rotation is the center of the bounbing box if possible or 
+      the center of the Edge.
+     
+      if the Edge of the object selected is already aligned to the last one,
+      a rotation of 180 deg is applied to the object.
+      In this case the Axis of rotation is Z vector : Base.Vector(0, 0, 1)
+    """
+    msg=verbose
+
+    error_msg =\
+    "INCORRECT Object(s) Selection :\n" +\
+    "You Must Select at least two(2) Edges (from two objects) !\n" +\
+    "All Edges will be aligned to the last one !"
+    
+    Selection = get_SelectedObjectsWithParent(info=msg, printError=False)
+
+    try:
+        SelectedObjects = Selection
+        Number_of_Edges  = SelectedObjects[1]
+        if msg!=0:
+            print_msg("Number_of_Edges=" + str(Number_of_Edges))
+            
+        if Number_of_Edges >= 2 :
+            Edge_List = SelectedObjects[4]
+            if msg != 0:
+                print_msg(" Edge_List=" + str(Edge_List))
+            
+            # Get the Reference Edge : last of the selected
+            Ref_Edge_dict = Edge_List[-1]
+            for Selected_Edge, Parent_Edge in Ref_Edge_dict.iteritems():
+                Edge_ref = Selected_Edge
+
+            del Edge_List[-1]
+                        
+            for Selected_Edge_dict in Edge_List:
+                if msg != 0:
+                    print_msg("Selected_Edge_dict = " + str(Selected_Edge_dict))
+                for Selected_Edge, Parent_Edge in Selected_Edge_dict.iteritems():
+                    if msg != 0:
+                        print_msg("Selected_Edge = " + str(Selected_Edge))
+                        print_msg("Parent = " + str(Parent_Edge))
+                    try:                        
+                        Edge_Point = Parent_Edge.Shape.BoundBox.Center
+                    except:
+                        Edge_Point = centerLinePoint(Selected_Edge,info=0)
+                    
+                    if msg != 0:
+                        print_point(Edge_Point, msg="Edge_Point = ")
+                    Edge = Selected_Edge
+                    
+                    if colinearEdges(Edge, Edge_ref, info=msg , tolerance=1e-12):
+                        rot_axis = Base.Vector(0, 0, 1).cross(edgeToVector(Edge))
+                        rot_center = Edge_Point
+                        rot_angle = 180. + m_angleAlignEdges
+                        Draft.rotate(Parent_Edge,rot_angle,rot_center,rot_axis)
+                    else:
+                        m_angle, m_angle_rad = angleBetween(Edge,Edge_ref)
+                        print_msg("m_angle = " + str(m_angle))
+                        rot_axis = edgeToVector(Edge).cross(edgeToVector(Edge_ref))
+                        print_msg("rot_axis = " + str(rot_axis))
+                        rot_center = Edge_Point
+                        rot_angle = m_angle + m_angleAlignEdges
+                        Draft.rotate(Parent_Edge,rot_angle,rot_center,rot_axis)
+        else:
+            printError_msg(error_msg)                          
+    except:
+        printError_msg(error_msg)
         
-    else:
-        printError_msg(error_msg)  
+    
+def object_jointPoints():
+    """
+    """
+    msg=verbose
+    msg=1
+
+    error_msg =\
+    "INCORRECT Object(s) Selection :\n" +\
+    "You Must Select at least two(2) Points (from two objects) !\n" +\
+    "All Points will be displaced onto the last one !"
+         
+    Selection = get_SelectedObjectsWithParent(info=msg, printError=False)
+
+    try:
+        SelectedObjects = Selection
+
+        SelectedObjects = Selection
+        Number_of_Points = SelectedObjects[0]
+        if msg!=0:
+            print_msg("Number_of_Points=" + str(Number_of_Points))
+            
+        if Number_of_Points >= 2 :
+            Point_List = SelectedObjects[3]
+            if msg != 0:
+                print_msg(" Point_List=" + str(Point_List))
+                    
+            # Get the Reference Point : last of the selected
+            Ref_Point_dict = Point_List[-1]
+            for Selected_Point, Parent_Point in Ref_Point_dict.iteritems():
+                Point_ref = Selected_Point
+                Parent_ref = Parent_Point
+            if msg != 0:
+                print_point(Point_ref, msg="Reference Point_ref = ")                
+            del Point_List[-1]
+            
+            for Selected_Point_dict in Point_List:
+                if msg != 0:
+                    print_msg("Selected_Point_dict = " + str(Selected_Point_dict))
+                for Selected_Point, Parent_Point in Selected_Point_dict.iteritems():
+                    if msg != 0:
+                        print_msg("Selected_Point = " + str(Selected_Point))
+                        print_msg("Parent_Point = " + str(Parent_Point))
+                    m_move = Point_ref.Point.sub(Selected_Point.Point)
+                    print_msg("m_move = " + str(m_move))
+                    m_rot = Parent_Point.Placement.Rotation
+                    m_base = Parent_Point.Placement.Base
+                    m_newplace = App.Placement(m_base.add(m_move), m_rot )
+                    Parent_Point.Placement = m_newplace
+            
+        else:
+            printError_msg(error_msg) 
         
-    #sel = Gui.Selection.getSelection()
-    #Nameelement = sel[0].Name
-    #pl = FreeCAD.Placement()
-    #pl.Rotation = Gui.ActiveDocument.ActiveView.getCameraOrientation()
-    #pl.Base = FreeCAD.Vector(0.0,0.0,0.0)
-    #App.ActiveDocument.getObject(Nameelement).Placement=pl
-   
-           
+    except:
+        printError_msg(error_msg)
+        
 ####################################################################################   
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -6632,6 +7926,7 @@ class WorkFeatureTab():
                              "button_twoplanes_axis"       : "plot_2PlanesAxis",
                              
                              "button_distLine"             : "plot_distLine",
+                             "button_angleLine"            : "plot_angleLine",
                              "button_cut_axis"             : "plot_cutAxis",
                              "button_cut_wire_axis"        : "plot_cutWireAxis",
                              "button_extension_axis"       : "plot_extensionAxis",
@@ -6643,7 +7938,7 @@ class WorkFeatureTab():
                              "button_linepoint_circle"     : "plot_linepointCircle",
                              "button_3points_circle"       : "plot_3pointsCircle",
                              "button_cut_circle"           : "plot_cutCircle",
-                             "button_3points_ellipse"      : "plot_3pointsEllipse",                          
+                             "button_3points_ellipse"      : "plot_3pointsEllipse",                        
                                                           
                              "button_threepoints_plane"    : "plot_3PointsPlane",
                              "button_axisandpoint_plane"   : "plot_axisPointPlane",
@@ -6661,6 +7956,8 @@ class WorkFeatureTab():
                              "button_boundingbox"          : "plot_boundingBox",
                              "button_cylinder_create"      : "plot_axisPointCylinder",
                              "button_cube_create"          : "plot_axisPointCube",
+                             "button_sphere_create"        : "plot_centerSphere",
+                             "button_dome_create"          : "plot_centerDome",
                              
                              "button_alignview"            : "view_align",                            
                              
@@ -6674,7 +7971,14 @@ class WorkFeatureTab():
                              "button_isPerpendicular"      : "object_perpendicular",
                              "button_isCoplanar"           : "object_coplanar",
                              "button_isClearance"          : "object_clearance",
-                            
+                             "button_isAngle"              : "object_angle",
+                             "button_isDistance"           : "points_distance",
+                             "button_isView"               : "camera_orientation",
+                             
+                             "button_alignface2view"       : "object_align2view",
+                             "button_align_faces"          : "object_alignFaces",
+                             "button_align_edges"          : "object_alignEdges",
+                             "button_joint_points"         : "object_jointPoints",                             
                             } 
                             
         self.connections_for_text_changed = {
@@ -6684,6 +7988,7 @@ class WorkFeatureTab():
                              "extension_twopoints_axis"  : "extensionTwoPointsAxis",
                              "extension_face_normal"     : "extensionFaceNormal",
                              "extension_line_point_axis" : "extensionLinePointAxis",
+                             "extension_line"            : "extensionLine", 
                              
                              "radius_circle"             : "radiusCircle",
                              
@@ -6694,7 +7999,9 @@ class WorkFeatureTab():
                              "length_cylinder"           : "lengthCylinder",
                              "section_cube"              : "sectionCube",
                              "height_cube"               : "heightCube",
-                             
+                             "diameter_sphere"           : "diameterSphere",
+                             "diameter_dome"             : "diameterDome", 
+                                             
                              "angle_cut_object"          : "angleCutObject",
                              "thickness_cut_object"      : "thicknessCutObject",
 
@@ -6707,7 +8014,8 @@ class WorkFeatureTab():
                              "dist_plane"                : "distPlane",
                              "dist_line"                 : "distLine",
                              "dist_point"                : "distPoint",
-                             
+                             "angle_align_faces"         : "angleAlignFaces",
+                             "angle_align_edges"         : "angleAlignEdges",
                             }
                             
         self.connections_for_spin_changed = {
@@ -6718,7 +8026,9 @@ class WorkFeatureTab():
                              "spin_circle_cut"           : "numberCircleCut",
                              "spin_dist_plane"           : "numberPlane",
                              "spin_dist_line"            : "numberLine",
+                             "spin_angle_line"           : "numberLine2",
                              "spin_dist_point"           : "numberPoint",
+                             "spin_frequency_dome"       : "frequencyDome",
                             }
                             
         self.connections_for_radiobutton_clicked = {                     
@@ -6785,17 +8095,27 @@ class WorkFeatureTab():
                              }
                              
         self.connections_for_ObjTrans_combobox_changed = {
-                             "ObjTrans_comboBox_start"        : "start_value",
-                             "ObjTrans_comboBox_end"          : "end_value",
+                             "ObjTrans_comboBox_start"        : "select_start_type",
+                             "ObjTrans_comboBox_end"          : "select_end_type",
                             }
  
         self.connections_for_ObjTrans_checkbox_toggled = { 
                             "ObjTrans_duplicate"              : "copyFlag",
+                            "ObjTrans_deepCopy"               : "deepCopyFlag",
                             }
                 
         self.connections_for_ObjTrans_spin_changed = {
                              "ObjTrans_spin"                  : "numberCopies",
                             }
+                        
+        self.connections_for_ObjTrans_return_pressed = { 
+                             "ObjTrans_start_x"           : "start_x_entered",
+                             "ObjTrans_start_y"           : "start_y_entered",
+                             "ObjTrans_start_z"           : "start_z_entered",
+                             "ObjTrans_end_x"             : "end_x_entered",
+                             "ObjTrans_end_y"             : "end_y_entered",
+                             "ObjTrans_end_z"             : "end_z_entered",
+                             }
 #==============================================================================
 # Connect to Translation functions
 #==============================================================================
@@ -6820,7 +8140,11 @@ class WorkFeatureTab():
             #print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.trans, str(m_val))) ) 
             QtCore.QObject.connect(getattr(self.ui, str(m_key)),
                                    QtCore.SIGNAL("valueChanged(int)"),getattr(self.trans, str(m_val))) 
-
+        
+        for m_key, m_val in self.connections_for_ObjTrans_return_pressed.items():
+            #print_msg( "Connecting : " + str(getattr(self.ui, str(m_key))) + " and " + str(getattr(self.trans, str(m_val))) )
+            QtCore.QObject.connect(getattr(self.ui, str(m_key)),
+                                   QtCore.SIGNAL("returnPressed()"),getattr(self.trans, str(m_val)))
 #==============================================================================
 # Define Connections to Rotation Object
 #==============================================================================
@@ -6832,6 +8156,7 @@ class WorkFeatureTab():
                              "ObjRot_button_select"         : "initialize",
                              "ObjRot_button_select_center"  : "select_center",
                              "ObjRot_button_select_axis"    : "select_axis",
+                             "ObjRot_button_select_angle"   : "select_angle",
                              "ObjRot_button_reset"          : "reset",
                              "ObjRot_button_apply"          : "application",
                              }
