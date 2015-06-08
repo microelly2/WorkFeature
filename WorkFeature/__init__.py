@@ -7853,30 +7853,40 @@ class WorkFeatureTab():
         self.m_main = self.getMainWindow()
         
         # Get Tab panel
-        self.m_tab = self.getComboView(self.m_main)
-        
-        if self.m_tab.count() == 2:
-            # Create a new fake dialog
-            self.m_fake_dialog = QtGui.QDialog()
-            self.m_tab.addTab(self.m_fake_dialog,"")
-            
-        # Create a new dialog for WorkFeatureTab
-        self.m_dialog = QtGui.QDialog()
-        # Add the dialog in a new tab or focus on it if already exists
-        if self.m_tab.count() >= 2:
-            for i in range(2,self.m_tab.count()):
-                #print_msg (str(isinstance(self.m_tab.tabText(i), unicode)))
-                #print_msg (str(unicode(self.m_tab.tabText(i), 'utf-8')))
-                #if "Work Features" == str(unicode(self.m_tab.tabText(i), 'utf-8')):
-                if "Work Features" == str(_fromUtf8(self.m_tab.tabText(i))):
-                    self.m_tab.removeTab(int(i))
-                    break
-        
-        self.m_tab.addTab(self.m_dialog,"Work Features")
-              
+        self.m_tab = self.getComboView2(self.m_main)
+
+
+
+
+#------------------------------------------
+        if False:
+            if self.m_tab.count() == 2:
+                # Create a new fake dialog
+                self.m_fake_dialog = QtGui.QDialog()
+                self.m_tab.addTab(self.m_fake_dialog,"")
+
+            # Create a new dialog for WorkFeatureTab
+            self.m_dialog = QtGui.QDialog()
+            FreeCAD.mm=self.m_dialog
+            # layout.addWidget(self.m_dialog)
+            #-----------------
+            # Add the dialog in a new tab or focus on it if already exists
+            if  self.m_tab.count() >= 2:
+                for i in range(2,self.m_tab.count()):
+                    #print_msg (str(isinstance(self.m_tab.tabText(i), unicode)))
+                    #print_msg (str(unicode(self.m_tab.tabText(i), 'utf-8')))
+                    #if "Work Features" == str(unicode(self.m_tab.tabText(i), 'utf-8')):
+                    if "Work Features" == str(_fromUtf8(self.m_tab.tabText(i))):
+                        self.m_tab.removeTab(int(i))
+                        break
+
+        self.m_dialog = QtGui.QWidget()
+        self.m_tab.addWidget(self.m_dialog)
         self.ui = WFGui.Ui_Form()
         self.ui.setupUi(self.m_dialog)
-        self.m_tab.setCurrentIndex(3)
+        # self.m_tab.setCurrentIndex(3)
+        self.m_dialog.setMaximumWidth(400)
+#----------------------------------------------------------------
 
         # Create a Rotation object
         self.rot = Rotation(self.ui)
@@ -8233,6 +8243,31 @@ class WorkFeatureTab():
         raise Exception("No tab widget found")
  
  
+ 
+    def getComboView2(self,window):
+        """ Returns the Dock window.
+        """
+        import FreeCAD
+        mw=FreeCAD.Gui.getMainWindow()
+        layout = QtGui.QVBoxLayout()
+        tab1= QtGui.QWidget()
+        myw=QtGui.QWidget()
+        myw.setLayout(layout)
+
+        dw1=QtGui.QDockWidget(mw)
+        dw1.setWindowTitle("Work Features")
+        dw1.setWidget(myw)
+
+        mw.addDockWidget(QtCore.Qt.LeftDockWidgetArea , dw1)
+        self.myw=myw
+        self.dw=dw1
+        layout.mw=mw
+        return layout
+
+
+
+ 
 if __name__ == '__main__':
     myDialog = WorkFeatureTab()
+    
     
