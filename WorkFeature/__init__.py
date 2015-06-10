@@ -8256,6 +8256,7 @@ class WorkFeatureTab():
 
         dw1=QtGui.QDockWidget(mw)
         dw1.setWindowTitle("Work Features")
+        dw1.setObjectName('WorkFeatures')
         dw1.setWidget(myw)
 
         mw.addDockWidget(QtCore.Qt.LeftDockWidgetArea , dw1)
