@@ -7840,15 +7840,29 @@ def object_jointPoints():
     except:
         printError_msg(error_msg)
         
+def closeme():
+	import FreeCADGui
+	t=FreeCADGui.getMainWindow()
+	wf = t.findChild(QtGui.QDockWidget, "WorkFeatures")
+	wf.close()
+
 ####################################################################################   
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
     _fromUtf8 = lambda s: s
 
+
+
 ####################################################################################  
 class WorkFeatureTab():
     def __init__(self):
+        import FreeCADGui
+        t=FreeCADGui.getMainWindow().findChild(QtGui.QDockWidget, "WorkFeatures")
+        if t:
+            t.show()
+            return
+
         # Get main window
         self.m_main = self.getMainWindow()
         
@@ -7904,7 +7918,7 @@ class WorkFeatureTab():
                 
         self.connections_for_button_pressed = { 
                              "button_origin"               : "plot_originObject",
-                             
+                             "button_WF_quit"               : "closeme",                              
                              "button_object_center"        : "plot_centerObjectPoint",
                              "button_Npoints_center"       : "plot_NpointsPoint",
                              "button_line_center"          : "plot_centerLinePoint",
@@ -8210,8 +8224,31 @@ class WorkFeatureTab():
         self.m_dialog.show()
         m_text=str(myRelease)
         self.ui.label_release.setText(QtGui.QApplication.translate("Form", m_text, None, QtGui.QApplication.UnicodeUTF8))
+        import FreeCADGui,FreeCAD
+        t=FreeCADGui.getMainWindow()
+        wf = t.findChild(QtGui.QDockWidget, "WorkFeatures")
+        cv = t.findChild(QtGui.QDockWidget, "Combo View")
+        FreeCAD.Console.PrintMessage(cv)
+        FreeCAD.Console.PrintMessage(wf)
+        cv.setFeatures( QtGui.QDockWidget.DockWidgetMovable | QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetClosable )
+        wf.setFeatures( QtGui.QDockWidget.DockWidgetMovable | QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetClosable  )
+        if wf and cv:
+          t.tabifyDockWidget(cv,wf)
+          FreeCAD.Console.PrintMessage("tabified ")
+        FreeCAD.Console.PrintMessage("done  ")
+
        
+    def closeme(self):
+        FreeCAD.Console.PrintMessage("huhuh")
+        
+ 
     def quit_clicked(self): # quit
+        import FreeCAD
+        FreeCAD.Console.PrintMessage("huhuh")
+        FreeCAD.m=self
+        self.m_tab.close()
+        FreeCAD.Console.PrintMessage("huhuh 2")
+        return
         #self.m_dialog.hide()
         self.m_dialog.close()
         if self.m_tab.count() >= 2:
@@ -8259,15 +8296,16 @@ class WorkFeatureTab():
         dw1.setObjectName('WorkFeatures')
         dw1.setWidget(myw)
 
-        mw.addDockWidget(QtCore.Qt.LeftDockWidgetArea , dw1)
+        mw.addDockWidget(QtCore.Qt.RightDockWidgetArea , dw1)
         self.myw=myw
         self.dw=dw1
         layout.mw=mw
         return layout
 
-
-
  
 if __name__ == '__main__':
     myDialog = WorkFeatureTab()
+    
+
+
     
